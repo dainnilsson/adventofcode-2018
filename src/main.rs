@@ -1,6 +1,7 @@
 use std::collections::HashSet;
 use std::env;
 use std::fs::File;
+use std::io;
 use std::io::prelude::*;
 
 fn main() {
@@ -9,44 +10,37 @@ fn main() {
     if args.len() == 2 {
         let day = args[1].parse::<u32>().unwrap();
 
-        if let Some(res) = run_day(day) {
+        if let Ok(res) = run_day(day) {
             println!("Day {}: {}", day, res);
         } else {
             println!("Error, can't run day {}", day);
         }
     } else {
         for i in 1..=24 {
-            if let Some(res) = run_day(i) {
+            if let Ok(res) = run_day(i) {
                 println!("Day {}: {}", i, res);
             }
         }
     }
 }
 
-fn run_day(i: u32) -> Option<String> {
-    let mut days: Vec<Box<Fn(&str) -> String>> = vec![];
-    days.push(Box::new(|input| format!("{:?}", day1(input))));
-    days.push(Box::new(|input| format!("{:?}", day2(input))));
-    days.push(Box::new(|input| format!("{:?}", day3(input))));
-    days.push(Box::new(|input| format!("{:?}", day4(input))));
-    days.push(Box::new(|input| format!("{:?}", day5(input))));
-
-    if let Some(input) = read_input(i) {
-        Some(days[i as usize - 1](&input))
-    } else {
-        None
-    }
+fn run_day(i: u32) -> io::Result<String> {
+    read_input(i).map(|input| match i {
+        1 => format!("{:?}", day1(&input)),
+        2 => format!("{:?}", day2(&input)),
+        3 => format!("{:?}", day3(&input)),
+        4 => format!("{:?}", day4(&input)),
+        5 => format!("{:?}", day5(&input)),
+        _ => panic!("Day not implemented!"),
+    })
 }
 
-fn read_input(i: u32) -> Option<String> {
-    match File::open(format!("input{}.txt", i)) {
-        Ok(mut f) => {
-            let mut contents = String::new();
-            f.read_to_string(&mut contents).unwrap();
-            Some(contents)
-        }
-        _ => None,
-    }
+fn read_input(i: u32) -> io::Result<String> {
+    File::open(format!("input{}.txt", i)).map(|mut f| {
+        let mut contents = String::new();
+        f.read_to_string(&mut contents).unwrap();
+        contents
+    })
 }
 
 pub fn day1(input: &str) -> (i32, i32) {
