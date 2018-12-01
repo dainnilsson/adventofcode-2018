@@ -1,0 +1,6 @@
+[package]
+name = "aoc-18"
+version = "0.1.0"
+authors = ["Dain Nilsson <dain@yubico.com>"]
+
+[dependencies]
