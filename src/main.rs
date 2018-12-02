@@ -57,8 +57,31 @@ pub fn day1(input: &str) -> (i32, i32) {
     }
 }
 
-pub fn day2(_input: &str) -> (i32, i32) {
-    (-1, -1)
+fn duplicates(x: &str, i: usize) -> bool {
+    x.chars().any(|c| x.chars().filter(|&a| a == c).count() == i)
+}
+
+pub fn day2(input: &str) -> (usize, String) {
+    let two = input.lines().filter(|l| duplicates(l, 2)).count();
+    let three = input.lines().filter(|l| duplicates(l, 3)).count();
+
+    let (a, b) = input
+        .lines()
+        .find_map(|a| {
+            input
+                .lines()
+                .find(|b| a.chars().zip(b.chars()).filter(|(x, y)| x != y).count() == 1)
+                .map(|b| (a, b))
+        }).unwrap();
+
+    let common: String = a
+        .chars()
+        .zip(b.chars())
+        .filter(|(x, y)| x == y)
+        .map(|(x, _)| x)
+        .collect();
+
+    (two * three, common)
 }
 
 pub fn day3(_input: &str) -> (i32, i32) {
@@ -85,4 +108,11 @@ mod tests {
         assert_eq!(b, 71961);
     }
 
+    #[test]
+    fn test_day2() {
+        let input = read_input(2).unwrap();
+        let (a, b) = day2(&input);
+        assert_eq!(a, 5976);
+        assert_eq!(b, "xretqmmonskvzupalfiwhcfdb");
+    }
 }
