@@ -93,6 +93,12 @@ struct Box {
     h: u32,
 }
 
+impl Box {
+    fn points<'a>(&'a self) -> impl Iterator<Item = (u32, u32)> + 'a {
+        (self.x..self.x + self.w).flat_map(move |x| (self.y..self.y + self.h).map(move |y| (x, y)))
+    }
+}
+
 pub fn day3(input: &str) -> (usize, u32) {
     let re = Regex::new(r"(?m)^#(\d+) @ (\d+),(\d+): (\d+)x(\d+)").unwrap();
     let boxes: Vec<Box> = re
@@ -109,18 +115,16 @@ pub fn day3(input: &str) -> (usize, u32) {
     let mut twice: HashSet<(u32, u32)> = HashSet::new();
 
     for b in &boxes {
-        for i in b.x..b.x + b.w {
-            for j in b.y..b.y + b.h {
-                if !claimed.insert((i, j)) {
-                    twice.insert((i, j));
-                }
+        for (x, y) in b.points() {
+            if !claimed.insert((x, y)) {
+                twice.insert((x, y));
             }
         }
     }
 
     let id: u32 = boxes
         .iter()
-        .find(|b| !(b.x..b.x + b.w).any(|x| (b.y..b.y + b.h).any(|y| twice.contains(&(x, y)))))
+        .find(|b| !b.points().any(|p| twice.contains(&p)))
         .map(|b| b.id)
         .unwrap();
 
