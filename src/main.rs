@@ -1,3 +1,6 @@
+extern crate regex;
+
+use regex::Regex;
 use std::collections::HashSet;
 use std::env;
 use std::fs::File;
@@ -10,10 +13,9 @@ fn main() {
     if args.len() == 2 {
         let day = args[1].parse::<u32>().unwrap();
 
-        if let Ok(res) = run_day(day) {
-            println!("Day {}: {}", day, res);
-        } else {
-            println!("Error, can't run day {}", day);
+        match run_day(day) {
+            Ok(res) => println!("Day {}: {}", day, res),
+            Err(_) => println!("Error, can't run day {}", day),
         }
     } else {
         for i in 1..=24 {
@@ -36,11 +38,9 @@ fn run_day(i: u32) -> io::Result<String> {
 }
 
 fn read_input(i: u32) -> io::Result<String> {
-    File::open(format!("input{}.txt", i)).map(|mut f| {
-        let mut contents = String::new();
-        f.read_to_string(&mut contents).unwrap();
-        contents
-    })
+    let mut contents = String::new();
+    File::open(format!("input{}.txt", i))?.read_to_string(&mut contents)?;
+    Ok(contents)
 }
 
 pub fn day1(input: &str) -> (i32, i32) {
@@ -58,7 +58,8 @@ pub fn day1(input: &str) -> (i32, i32) {
 }
 
 fn duplicates(x: &str, i: usize) -> bool {
-    x.chars().any(|c| x.chars().filter(|&a| a == c).count() == i)
+    x.chars()
+        .any(|c| x.chars().filter(|&a| a == c).count() == i)
 }
 
 pub fn day2(input: &str) -> (usize, String) {
@@ -84,8 +85,46 @@ pub fn day2(input: &str) -> (usize, String) {
     (two * three, common)
 }
 
-pub fn day3(_input: &str) -> (i32, i32) {
-    (-1, -1)
+struct Box {
+    id: u32,
+    x: u32,
+    y: u32,
+    w: u32,
+    h: u32,
+}
+
+pub fn day3(input: &str) -> (usize, u32) {
+    let re = Regex::new(r"(?m)^#(\d+) @ (\d+),(\d+): (\d+)x(\d+)").unwrap();
+    let boxes: Vec<Box> = re
+        .captures_iter(input)
+        .map(|m| Box {
+            id: m[1].parse().unwrap(),
+            x: m[2].parse().unwrap(),
+            y: m[3].parse().unwrap(),
+            w: m[4].parse().unwrap(),
+            h: m[5].parse().unwrap(),
+        }).collect();
+
+    let mut claimed: HashSet<(u32, u32)> = HashSet::new();
+    let mut twice: HashSet<(u32, u32)> = HashSet::new();
+
+    for b in &boxes {
+        for i in b.x..b.x + b.w {
+            for j in b.y..b.y + b.h {
+                if !claimed.insert((i, j)) {
+                    twice.insert((i, j));
+                }
+            }
+        }
+    }
+
+    let id: u32 = boxes
+        .iter()
+        .find(|b| !(b.x..b.x + b.w).any(|x| (b.y..b.y + b.h).any(|y| twice.contains(&(x, y)))))
+        .map(|b| b.id)
+        .unwrap();
+
+    (twice.len(), id)
 }
 
 pub fn day4(_input: &str) -> (i32, i32) {
@@ -114,5 +153,13 @@ mod tests {
         let (a, b) = day2(&input);
         assert_eq!(a, 5976);
         assert_eq!(b, "xretqmmonskvzupalfiwhcfdb");
+    }
+
+    #[test]
+    fn test_day3() {
+        let input = read_input(3).unwrap();
+        let (a, b) = day3(&input);
+        assert_eq!(a, 101565);
+        assert_eq!(b, 656);
     }
 }
