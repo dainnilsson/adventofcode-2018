@@ -1,7 +1,7 @@
 extern crate regex;
 
 use regex::Regex;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs::File;
 use std::io;
@@ -131,8 +131,79 @@ pub fn day3(input: &str) -> (usize, u32) {
     (twice.len(), id)
 }
 
-pub fn day4(_input: &str) -> (i32, i32) {
-    (-1, -1)
+#[derive(Ord, PartialOrd, PartialEq, Eq)]
+enum Day4Action {
+    Begin(u32),
+    Sleep,
+    Wake,
+}
+
+#[derive(Ord, PartialOrd, PartialEq, Eq)]
+struct Day4Entry {
+    year: u32,
+    month: u32,
+    day: u32,
+    h: u32,
+    m: u32,
+    action: Day4Action,
+}
+
+fn max_minute(input: &Vec<(u32, u32)>) -> (u32, u32) {
+    let mut ms = HashMap::new();
+    input
+        .iter()
+        .flat_map(|(f, t)| *f..*t)
+        .for_each(|x| *ms.entry(x).or_insert(0) += 1);
+    ms.iter().max().map(|(&f, &m)| (f, m)).unwrap()
+}
+
+pub fn day4(input: &str) -> (u32, u32) {
+    let re_entry = Regex::new(r"(?m)^\[(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})\] (.+)$").unwrap();
+    let re_id = Regex::new(r".*#(\d+) .*").unwrap();
+    let mut entries: Vec<Day4Entry> = re_entry
+        .captures_iter(input)
+        .map(|m| Day4Entry {
+            year: m[1].parse().unwrap(),
+            month: m[2].parse().unwrap(),
+            day: m[3].parse().unwrap(),
+            h: m[4].parse().unwrap(),
+            m: m[5].parse().unwrap(),
+            action: match &m[6] {
+                "wakes up" => Day4Action::Wake,
+                "falls asleep" => Day4Action::Sleep,
+                _ => Day4Action::Begin(re_id.captures(&m[6]).unwrap()[1].parse().unwrap()),
+            },
+        }).collect();
+
+    entries.sort();
+
+    let mut id = 0;
+    let mut sleep_at = 0;
+    let mut sleeps: HashMap<u32, Vec<(u32, u32)>> = HashMap::new();
+    for e in &entries {
+        match e.action {
+            Day4Action::Begin(x) => id = x,
+            Day4Action::Sleep => sleep_at = e.m,
+            Day4Action::Wake => sleeps.entry(id).or_insert(vec![]).push((sleep_at, e.m)),
+        }
+    }
+
+    let a = sleeps
+        .iter()
+        .max_by_key::<usize, _>(|&(_, v)| v.iter().flat_map(|(f, t)| *f..*t).count())
+        .map(|(k, v)| k * max_minute(v).1)
+        .unwrap();
+
+    let b = sleeps
+        .iter()
+        .map(|(k, v)| {
+            let (f, m) = max_minute(v);
+            (f, k * m)
+        }).max()
+        .unwrap()
+        .1;
+
+    (a, b)
 }
 
 pub fn day5(_input: &str) -> (i32, i32) {
@@ -165,5 +236,13 @@ mod tests {
         let (a, b) = day3(&input);
         assert_eq!(a, 101565);
         assert_eq!(b, 656);
+    }
+
+    #[test]
+    fn test_day4() {
+        let input = read_input(4).unwrap();
+        let (a, b) = day4(&input);
+        assert_eq!(a, 19025);
+        assert_eq!(b, 23776);
     }
 }
