@@ -1,6 +1,7 @@
 extern crate regex;
 
 use regex::Regex;
+use std::cmp;
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs::File;
@@ -206,8 +207,38 @@ pub fn day4(input: &str) -> (u32, u32) {
     (a, b)
 }
 
-pub fn day5(_input: &str) -> (i32, i32) {
-    (-1, -1)
+fn poly_reduce(cs: &mut Vec<char>) {
+    let mut i = 0;
+    while i < cs.len() - 1 {
+        i += 1;
+        let (a, b) = (cs[i - 1], cs[i]);
+        if ((a as i8) - (b as i8)).abs() == 32 {
+            cs.remove(i - 1);
+            cs.remove(i - 1);
+            i = cmp::max(0, i as i32 - 2) as usize;
+        }
+    }
+}
+
+pub fn day5(input: &str) -> (usize, usize) {
+    let mut cs: Vec<_> = input.trim().chars().collect();
+    poly_reduce(&mut cs);
+    let a = cs.len();
+
+    let b = (65..=90)
+        .map(|i| {
+            let c1 = i as u8 as char;
+            let c2 = (i + 32) as u8 as char;
+            let mut x: Vec<char> = cs
+                .clone()
+                .into_iter()
+                .filter(|&x| x != c1 && x != c2)
+                .collect();
+            poly_reduce(&mut x);
+            x.len()
+        }).min()
+        .unwrap();
+    (a, b)
 }
 
 #[cfg(test)]
@@ -244,5 +275,13 @@ mod tests {
         let (a, b) = day4(&input);
         assert_eq!(a, 19025);
         assert_eq!(b, 23776);
+    }
+
+    #[test]
+    fn test_day5() {
+        let input = read_input(5).unwrap();
+        let (a, b) = day5(&input);
+        assert_eq!(a, 10496);
+        assert_eq!(b, 5774);
     }
 }
