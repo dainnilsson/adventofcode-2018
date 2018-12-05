@@ -154,7 +154,7 @@ fn max_minute(input: &Vec<(u32, u32)>) -> (u32, u32) {
         .iter()
         .flat_map(|(f, t)| *f..*t)
         .for_each(|x| *ms.entry(x).or_insert(0) += 1);
-    ms.iter().max().map(|(&f, &m)| (f, m)).unwrap()
+    ms.iter().max_by_key(|(_, f)| *f).map(|(&m, &f)| (f, m)).unwrap()
 }
 
 pub fn day4(input: &str) -> (u32, u32) {
