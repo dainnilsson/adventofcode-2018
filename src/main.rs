@@ -95,7 +95,8 @@ mod day2 {
                     .lines()
                     .find(|b| a.chars().zip(b.chars()).filter(|(x, y)| x != y).count() == 1)
                     .map(|b| (a, b))
-            }).unwrap();
+            })
+            .unwrap();
 
         let common: String = a
             .chars()
@@ -137,7 +138,8 @@ mod day3 {
                 y: m[3].parse().unwrap(),
                 w: m[4].parse().unwrap(),
                 h: m[5].parse().unwrap(),
-            }).collect();
+            })
+            .collect();
 
         let mut claimed: HashSet<(u32, u32)> = HashSet::new();
         let mut twice: HashSet<(u32, u32)> = HashSet::new();
@@ -210,7 +212,8 @@ mod day4 {
                     "falls asleep" => Action::Sleep,
                     _ => Action::Begin(re_id.captures(&m[6]).unwrap()[1].parse().unwrap()),
                 },
-            }).collect();
+            })
+            .collect();
 
         entries.sort();
 
@@ -236,7 +239,8 @@ mod day4 {
             .map(|(k, v)| {
                 let (f, m) = max_minute(v);
                 (f, k * m)
-            }).max()
+            })
+            .max()
             .unwrap()
             .1;
 
@@ -274,7 +278,8 @@ mod day5 {
                     .collect();
                 poly_reduce(&mut x);
                 x.len()
-            }).min()
+            })
+            .min()
             .unwrap();
         (a, b)
     }
@@ -311,7 +316,8 @@ mod day6 {
                 let x = parts.next().unwrap();
                 let y = parts.next().unwrap();
                 (x, y)
-            }).collect();
+            })
+            .collect();
 
         let (min_x, max_x, min_y, max_y) = points.iter().fold(
             (std::i32::MAX, std::i32::MIN, std::i32::MAX, std::i32::MIN),
@@ -372,7 +378,8 @@ mod day7 {
         deps.iter()
             .filter(|(k, v)| {
                 !done.contains(k) && !excl.contains(k) && v.iter().all(|x| done.contains(&x))
-            }).next()
+            })
+            .next()
             .map(|(&k, _)| k)
     }
 
@@ -413,7 +420,8 @@ mod day7 {
                     } else {
                         (*t, *c_done)
                     }
-                }).collect();
+                })
+                .collect();
 
             time = workers
                 .iter()
