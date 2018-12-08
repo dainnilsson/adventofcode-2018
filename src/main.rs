@@ -122,7 +122,7 @@ mod day3 {
     }
 
     impl Claim {
-        fn points<'a>(&'a self) -> impl Iterator<Item = (u32, u32)> + 'a {
+        fn points(&self) -> impl Iterator<Item = (u32, u32)> + '_ {
             (self.x..self.x + self.w)
                 .flat_map(move |x| (self.y..self.y + self.h).map(move |y| (x, y)))
         }
@@ -249,8 +249,6 @@ mod day4 {
 }
 
 mod day5 {
-    use std::cmp;
-
     fn poly_reduce(cs: &mut Vec<u8>) {
         let mut i = 0;
         while i < cs.len() - 1 {
@@ -259,7 +257,7 @@ mod day5 {
             if ((a as i8) - (b as i8)).abs() == 32 {
                 cs.remove(i - 1);
                 cs.remove(i - 1);
-                i = cmp::max(0, i as i32 - 2) as usize;
+                i = i.saturating_sub(2);
             }
         }
     }
@@ -286,8 +284,9 @@ mod day5 {
 }
 
 mod day6 {
-    use std::cmp;
-    use std::collections::HashMap;
+    use std::cmp::{max, min};
+    use std::collections::{HashMap, HashSet};
+    use std::i32::{MAX, MIN};
 
     fn manhattan(a: (i32, i32), b: (i32, i32)) -> i32 {
         (a.0 - b.0).abs() as i32 + (a.1 - b.1).abs() as i32
@@ -319,50 +318,39 @@ mod day6 {
             })
             .collect();
 
-        let (min_x, max_x, min_y, max_y) = points.iter().fold(
-            (std::i32::MAX, std::i32::MIN, std::i32::MAX, std::i32::MIN),
-            |acc, p| {
-                (
-                    cmp::min(acc.0, p.0),
-                    cmp::max(acc.1, p.0),
-                    cmp::min(acc.2, p.1),
-                    cmp::max(acc.3, p.1),
-                )
-            },
-        );
+        let (min_x, max_x, min_y, max_y) = points.iter().fold((MAX, MIN, MAX, MIN), |acc, p| {
+            (
+                min(acc.0, p.0),
+                max(acc.1, p.0),
+                min(acc.2, p.1),
+                max(acc.3, p.1),
+            )
+        });
 
         let mut map = HashMap::new();
+        let mut edge = HashSet::new();
         for y in min_y..=max_y {
             for x in min_x..=max_x {
                 if let Some(p) = closest_point(&points, (x, y)) {
                     *map.entry(p).or_insert(0) += 1;
-                };
-            }
-        }
-
-        let mut largest = map.clone();
-        for x in min_x..=max_x {
-            for y in [min_y, max_y].iter() {
-                if let Some(p) = closest_point(&points, (x, *y)) {
-                    largest.remove(&p);
-                }
-            }
-        }
-        for y in min_y..=max_y {
-            for x in [min_x, max_x].iter() {
-                if let Some(p) = closest_point(&points, (*x, y)) {
-                    largest.remove(&p);
+                    if p.0 == min_x || p.0 == max_x || p.1 == min_y || p.1 == max_y {
+                        edge.insert(p.to_owned());
+                    }
                 }
             }
         }
 
-        let a = *largest.values().max().unwrap();
+        let a = map
+            .iter()
+            .filter_map(|(k, v)| if edge.contains(&k) { None } else { Some(v) })
+            .max()
+            .unwrap();
 
         let b = (min_x..=max_x)
-            .flat_map(move |x| (min_y..max_y).map(move |y| (x, y)))
+            .flat_map(move |x| (min_y..=max_y).map(move |y| (x, y)))
             .filter(|a| points.iter().map(|b| manhattan(*a, *b)).sum::<i32>() < 10000)
             .count();
-        (a, b)
+        (*a, b)
     }
 }
 
@@ -451,23 +439,19 @@ mod day8 {
     }
 
     impl Node {
-        fn parse(data: &Vec<usize>, offs: usize) -> (Node, usize) {
-            let mut offs = offs;
-            let n_children = data[offs];
-            let n_metadata: usize = data[offs + 1];
-            offs += 2;
-            let mut n = Node {
-                metadata: vec![],
-                children: vec![],
-            };
-            for _ in 0..n_children {
-                let (child, n_offs) = Node::parse(data, offs);
-                offs = n_offs;
-                n.children.push(child);
+        fn parse(data: &Vec<usize>, offs: &mut usize) -> Self {
+            let n_children = data[*offs];
+            let n_metadata: usize = data[*offs + 1];
+            *offs += 2;
+            Node {
+                children: (0..n_children).map(|_| Node::parse(data, offs)).collect(),
+                metadata: (0..n_metadata)
+                    .map(|_| {
+                        *offs += 1;
+                        data[*offs - 1]
+                    })
+                    .collect(),
             }
-            n.metadata = data[offs..offs + n_metadata].to_vec();
-
-            (n, offs + n_metadata)
         }
 
         fn checksum(&self) -> usize {
@@ -495,7 +479,7 @@ mod day8 {
             .split(" ")
             .map(|c| c.parse().unwrap())
             .collect();
-        let root = Node::parse(&data, 0).0;
+        let root = Node::parse(&data, &mut 0);
         let a = root.checksum();
         let b = root.value();
         (a, b)
