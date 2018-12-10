@@ -35,7 +35,10 @@ fn run_day(i: u32) -> io::Result<String> {
         7 => format!("{:?}", day7::run(&input)),
         8 => format!("{:?}", day8::run(&input)),
         9 => format!("{:?}", day9::run(&input)),
-        10 => format!("{:?}", day10::run(&input)),
+        10 => {
+            let (a, b) = day10::run(&input);
+            format!("\n{}{}", a, b)
+        }
         11 => format!("{:?}", day11::run(&input)),
         12 => format!("{:?}", day12::run(&input)),
         13 => format!("{:?}", day13::run(&input)),
@@ -183,7 +186,7 @@ mod day4 {
         action: Action,
     }
 
-    fn max_minute(input: &Vec<(u32, u32)>) -> (u32, u32) {
+    fn max_minute(input: &[(u32, u32)]) -> (u32, u32) {
         let mut ms = HashMap::new();
         input
             .iter()
@@ -292,7 +295,7 @@ mod day6 {
         (a.0 - b.0).abs() as i32 + (a.1 - b.1).abs() as i32
     }
 
-    fn closest_point(points: &Vec<(i32, i32)>, coord: (i32, i32)) -> Option<(i32, i32)> {
+    fn closest_point(points: &[(i32, i32)], coord: (i32, i32)) -> Option<(i32, i32)> {
         let mut closest = None;
         let mut distance = std::i32::MAX;
         for (x, y) in points {
@@ -439,7 +442,7 @@ mod day8 {
     }
 
     impl Node {
-        fn parse(data: &Vec<usize>, offs: &mut usize) -> Self {
+        fn parse(data: &[usize], offs: &mut usize) -> Self {
             let n_children = data[*offs];
             let n_metadata: usize = data[*offs + 1];
             *offs += 2;
@@ -487,14 +490,113 @@ mod day8 {
 }
 
 mod day9 {
-    pub fn run(_input: &str) -> (usize, usize) {
-        unimplemented!();
+    use std::collections::{HashMap, LinkedList};
+
+    fn game(players: usize, stop_at: usize) -> usize {
+        let mut scores: HashMap<usize, usize> = HashMap::new();
+        let mut circle: LinkedList<usize> = LinkedList::new();
+        circle.push_back(0);
+        circle.push_front(1);
+        for marble in 2..=stop_at {
+            if marble % 23 == 0 {
+                let mut head = circle.split_off(circle.len()-7);
+                head.append(&mut circle);
+                circle = head;
+                *scores.entry(marble % players).or_insert(0) += marble + circle.pop_front().unwrap();
+            } else {
+                let mut head = circle.split_off(2);
+                head.append(&mut circle);
+                circle = head;
+                circle.push_front(marble);
+            }
+        }
+
+        *scores.values().max().unwrap()
+    }
+
+    pub fn run(input: &str) -> (usize, usize) {
+        let words: Vec<_> = input.split(" ").collect();
+        let players: usize = words[0].parse().unwrap();
+        let stop_at: usize = words[6].parse().unwrap();
+
+        let a = game(players, stop_at);
+        let b = game(players, 100 * stop_at);
+
+        (a, b)
     }
 }
 
 mod day10 {
-    pub fn run(_input: &str) -> (usize, usize) {
-        unimplemented!();
+    use regex::Regex;
+    use std::i32::MAX;
+
+    struct Star {
+        x: i32,
+        y: i32,
+        dx: i32,
+        dy: i32,
+    }
+
+    impl Star {
+        fn pos_at(&self, tick: i32) -> (i32, i32) {
+            (self.x + tick * self.dx, self.y + tick * self.dy)
+        }
+    }
+
+    fn show_at(stars: &[Star], tick: i32) -> String {
+        let points: Vec<_> = stars.iter().map(|s| s.pos_at(tick)).collect();
+        let min_x = points.iter().map(|p| p.0).min().unwrap();
+        let max_x = points.iter().map(|p| p.0).max().unwrap();
+        let min_y = points.iter().map(|p| p.1).min().unwrap();
+        let max_y = points.iter().map(|p| p.1).max().unwrap();
+
+        let mut line = String::new();
+        for y in min_y..=max_y {
+            for x in min_x..=max_x {
+                if points.iter().any(|p| p.0 == x && p.1 == y) {
+                    line.push('#');
+                } else {
+                    line.push('.');
+                }
+            }
+            line.push('\n');
+        }
+
+        line
+    }
+
+    pub fn run(input: &str) -> (String, i32) {
+        let re = Regex::new(
+            r"(?m)^position=<[ ]?([-]?\d+), +([-]?\d+)> velocity=<[ ]?([-]?\d+), +([-]?\d+)>$",
+        )
+        .unwrap();
+        let stars: Vec<_> = re
+            .captures_iter(input)
+            .map(|m| Star {
+                x: m[1].parse().unwrap(),
+                y: m[2].parse().unwrap(),
+                dx: m[3].parse().unwrap(),
+                dy: m[4].parse().unwrap(),
+            })
+            .collect();
+
+        let mut min_width = MAX;
+        let mut tick = 0;
+        loop {
+            let points: Vec<_> = stars.iter().map(|s| s.pos_at(tick)).collect();
+            let min_x = points.iter().map(|p| p.0).min().unwrap();
+            let max_x = points.iter().map(|p| p.0).max().unwrap();
+            let dx = max_x - min_x;
+            if dx > min_width {
+                tick -= 1;
+                break;
+            }
+            min_width = dx;
+            tick += 1;
+        }
+        let ans = show_at(&stars, tick);
+
+        (ans, tick)
     }
 }
 
@@ -648,5 +750,35 @@ mod tests {
         let (a, b) = day8::run(&input);
         assert_eq!(a, 37905);
         assert_eq!(b, 33891);
+    }
+
+    #[test]
+    fn test_day9() {
+        let input = read_input(9).unwrap();
+        let (a, b) = day9::run(&input);
+        assert_eq!(a, 374690);
+        assert_eq!(b, 3009951158);
+    }
+
+    #[test]
+    fn test_day10() {
+        let input = read_input(10).unwrap();
+        let (a, b) = day10::run(&input);
+        assert_eq!(
+            a,
+            "\
+             #.......#....#.....###..######..#....#....##....#....#....##..\n\
+             #.......#....#......#...#.......#...#....#..#...#....#...#..#.\n\
+             #........#..#.......#...#.......#..#....#....#...#..#...#....#\n\
+             #........#..#.......#...#.......#.#.....#....#...#..#...#....#\n\
+             #.........##........#...#####...##......#....#....##....#....#\n\
+             #.........##........#...#.......##......######....##....######\n\
+             #........#..#.......#...#.......#.#.....#....#...#..#...#....#\n\
+             #........#..#...#...#...#.......#..#....#....#...#..#...#....#\n\
+             #.......#....#..#...#...#.......#...#...#....#..#....#..#....#\n\
+             ######..#....#...###....#.......#....#..#....#..#....#..#....#\n\
+             "
+        );
+        assert_eq!(b, 10312);
     }
 }
