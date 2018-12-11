@@ -499,10 +499,11 @@ mod day9 {
         circle.push_front(1);
         for marble in 2..=stop_at {
             if marble % 23 == 0 {
-                let mut head = circle.split_off(circle.len()-7);
+                let mut head = circle.split_off(circle.len() - 7);
                 head.append(&mut circle);
                 circle = head;
-                *scores.entry(marble % players).or_insert(0) += marble + circle.pop_front().unwrap();
+                *scores.entry(marble % players).or_insert(0) +=
+                    marble + circle.pop_front().unwrap();
             } else {
                 let mut head = circle.split_off(2);
                 head.append(&mut circle);
@@ -601,8 +602,69 @@ mod day10 {
 }
 
 mod day11 {
-    pub fn run(_input: &str) -> (usize, usize) {
-        unimplemented!();
+    use std::cmp::max;
+    use std::i32::MIN;
+
+    fn max_square(
+        rows: &Vec<Vec<i32>>,
+        cols: &Vec<Vec<i32>>,
+        x: usize,
+        y: usize,
+        smax: usize,
+    ) -> (usize, i32) {
+        let mut score = rows[y][x];
+        let mut high = MIN;
+        let mut res = (1, score);
+        for s in 1..smax {
+            score += rows[y + s][x..=x + s].iter().sum::<i32>();
+            score += cols[x + s][y..y + s].iter().sum::<i32>();
+            if score > high {
+                high = score;
+                res = (s + 1, high);
+            }
+        }
+        res
+    }
+
+    fn power_square(rows: &Vec<Vec<i32>>, x: usize, y: usize, s: usize) -> i32 {
+        (0..s)
+            .flat_map(move |i| (0..s).map(move |j| (x + i, y + j)))
+            .map(|(a, b)| rows[b][a])
+            .sum()
+    }
+
+    pub fn run(input: &str) -> ((usize, usize), (usize, usize, usize)) {
+        let serial: i32 = input.trim().parse().unwrap();
+
+        let rows: Vec<Vec<i32>> = (0..300)
+            .map(|y| {
+                (0..300)
+                    .map(|x| {
+                        let rack_id = 11 + x;
+                        (((rack_id * (y + 1) + serial) * rack_id / 100) % 10) - 5
+                    })
+                    .collect()
+            })
+            .collect();
+
+        let cols: Vec<Vec<i32>> = (0..300)
+            .map(|x| (0..300).map(|y| rows[y][x]).collect())
+            .collect();
+
+        let a = (0..298)
+            .flat_map(move |x| (0..298).map(move |y| (x, y)))
+            .max_by_key::<i32, _>(|(x, y)| power_square(&rows, *x, *y, 3))
+            .map(|(x, y)| (x + 1, y + 1))
+            .unwrap();
+
+        let b = (0..300)
+            .flat_map(move |x| (0..300).map(move |y| (x, y)))
+            .map(|(x, y)| (x, y, max_square(&rows, &cols, x, y, 300 - max(x, y))))
+            .max_by_key::<i32, _>(|(_, _, m)| m.1)
+            .map(|(x, y, m)| (x + 1, y + 1, m.0))
+            .unwrap();
+
+        (a, b)
     }
 }
 
@@ -780,5 +842,13 @@ mod tests {
              "
         );
         assert_eq!(b, 10312);
+    }
+
+    #[test]
+    fn test_day11() {
+        let input = read_input(11).unwrap();
+        let (a, b) = day11::run(&input);
+        assert_eq!(a, (235, 22));
+        assert_eq!(b, (231, 135, 8));
     }
 }
