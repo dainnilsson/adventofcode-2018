@@ -603,65 +603,99 @@ mod day10 {
 
 mod day11 {
     use std::cmp::max;
-    use std::i32::MIN;
 
-    fn max_square(
-        rows: &Vec<Vec<i32>>,
-        cols: &Vec<Vec<i32>>,
-        x: usize,
-        y: usize,
-        smax: usize,
-    ) -> (usize, i32) {
-        let mut score = rows[y][x];
-        let mut high = MIN;
-        let mut res = (1, score);
-        for s in 1..smax {
-            score += rows[y + s][x..=x + s].iter().sum::<i32>();
-            score += cols[x + s][y..y + s].iter().sum::<i32>();
-            if score > high {
-                high = score;
-                res = (s + 1, high);
-            }
-        }
-        res
+    struct Grid {
+        rows: Vec<Vec<i32>>,
+        cols: Vec<Vec<i32>>,
     }
 
-    fn power_square(rows: &Vec<Vec<i32>>, x: usize, y: usize, s: usize) -> i32 {
-        (0..s)
-            .flat_map(move |i| (0..s).map(move |j| (x + i, y + j)))
-            .map(|(a, b)| rows[b][a])
-            .sum()
+    impl Grid {
+        fn new(serial: i32, size: usize) -> Self {
+            let rows: Vec<Vec<i32>> = (0..size)
+                .map(|y| {
+                    (0..size)
+                        .map(|x| {
+                            let rack_id = 11 + x as i32;
+                            (((rack_id * (y as i32 + 1) + serial) * rack_id / 100) % 10) - 5
+                        })
+                        .collect()
+                })
+                .collect();
+
+            let cols: Vec<Vec<i32>> = (0..size)
+                .map(|x| (0..size).map(|y| rows[y][x]).collect())
+                .collect();
+            Grid {
+                rows: rows,
+                cols: cols,
+            }
+        }
+
+        fn score(&self, x: usize, y: usize, s: usize) -> i32 {
+            self.box_scores(x, y).nth(s - 1).unwrap().1
+        }
+
+        fn box_scores(&self, x: usize, y: usize) -> BoxIter {
+            BoxIter {
+                matrix: self,
+                score: 0,
+                x: x,
+                y: y,
+                s: 0,
+            }
+        }
+
+        fn len(&self) -> usize {
+            self.rows.len()
+        }
+    }
+
+    struct BoxIter<'a> {
+        matrix: &'a Grid,
+        score: i32,
+        x: usize,
+        y: usize,
+        s: usize,
+    }
+
+    impl<'a> Iterator for BoxIter<'a> {
+        type Item = (usize, i32);
+
+        fn next(&mut self) -> Option<(usize, i32)> {
+            if max(self.x, self.y) + self.s >= self.matrix.len() {
+                None
+            } else {
+                self.score += self.matrix.rows[self.y + self.s][self.x..=self.x + self.s]
+                    .iter()
+                    .sum::<i32>();
+                self.score += self.matrix.cols[self.x + self.s][self.y..self.y + self.s]
+                    .iter()
+                    .sum::<i32>();
+                self.s += 1;
+                Some((self.s, self.score))
+            }
+        }
     }
 
     pub fn run(input: &str) -> ((usize, usize), (usize, usize, usize)) {
         let serial: i32 = input.trim().parse().unwrap();
+        let n = 300;
+        let matrix = Grid::new(serial, n);
 
-        let rows: Vec<Vec<i32>> = (0..300)
-            .map(|y| {
-                (0..300)
-                    .map(|x| {
-                        let rack_id = 11 + x;
-                        (((rack_id * (y + 1) + serial) * rack_id / 100) % 10) - 5
-                    })
-                    .collect()
-            })
-            .collect();
-
-        let cols: Vec<Vec<i32>> = (0..300)
-            .map(|x| (0..300).map(|y| rows[y][x]).collect())
-            .collect();
-
-        let a = (0..298)
-            .flat_map(move |x| (0..298).map(move |y| (x, y)))
-            .max_by_key::<i32, _>(|(x, y)| power_square(&rows, *x, *y, 3))
+        let a = (0..n - 2)
+            .flat_map(move |x| (0..n - 2).map(move |y| (x, y)))
+            .max_by_key::<i32, _>(|(x, y)| matrix.score(*x, *y, 3))
             .map(|(x, y)| (x + 1, y + 1))
             .unwrap();
 
-        let b = (0..300)
-            .flat_map(move |x| (0..300).map(move |y| (x, y)))
-            .map(|(x, y)| (x, y, max_square(&rows, &cols, x, y, 300 - max(x, y))))
-            .max_by_key::<i32, _>(|(_, _, m)| m.1)
-            .map(|(x, y, m)| (x + 1, y + 1, m.0))
+        let b = (0..n)
+            .flat_map(move |x| (0..n).map(move |y| (x, y)))
+            .map(|(x, y)| {
+                let (size, score) = matrix.box_scores(x, y).max_by_key(|(_, s)| *s).unwrap();
+                ((x, y, size), score)
+            })
+            .max_by_key::<i32, _>(|(_, score)| *score)
+            .map(|((x, y, size), _)| (x + 1, y + 1, size))
             .unwrap();
 
         (a, b)
