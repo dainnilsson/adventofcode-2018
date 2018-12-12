@@ -703,8 +703,114 @@ mod day11 {
 }
 
 mod day12 {
-    pub fn run(_input: &str) -> (usize, usize) {
-        unimplemented!();
+    use std::collections::HashMap;
+
+    struct Pots {
+        state: Vec<char>,
+        ts: HashMap<Vec<char>, char>,
+        start: i32,
+        tick: usize,
+    }
+
+    impl Pots {
+        fn pot_at(&self, pos: i32) -> char {
+            *self.state.get((pos - self.start) as usize).unwrap_or(&'.')
+        }
+
+        fn state_at(&self, pos: i32) -> Vec<char> {
+            (pos - 2..=pos + 2).map(|p| self.pot_at(p)).collect()
+        }
+
+        fn step(&mut self) {
+            let new_state: Vec<char> = (-2..(self.state.len() as i32) + 2)
+                .map(|i| {
+                    *self
+                        .ts
+                        .get(&self.state_at(i as i32 + self.start))
+                        .unwrap_or(&'.')
+                })
+                .collect();
+            self.state = new_state;
+            self.start -= 2;
+            while self.state[0..=2] == ['.', '.', '.'] {
+                self.state.remove(0);
+                self.start += 1;
+            }
+            while self.state[self.state.len() - 3..self.state.len()] == ['.', '.', '.'] {
+                self.state.pop();
+            }
+            self.tick += 1;
+        }
+
+        fn checksum(&self) -> i32 {
+            (0..self.state.len() as i32)
+                .map(|i| {
+                    let pos = i + self.start;
+                    (pos, self.pot_at(pos))
+                })
+                .filter(|(_, p)| *p == '#')
+                .map(|(i, _)| i)
+                .sum()
+        }
+
+        fn pattern(&self) -> String {
+            format!("{}", self.state.iter().collect::<String>())
+        }
+    }
+
+    pub fn run(input: &str) -> (i32, i64) {
+        let mut lines = input.lines();
+        let state: Vec<_> = lines
+            .next()
+            .unwrap()
+            .rsplit(' ')
+            .next()
+            .unwrap()
+            .chars()
+            .collect();
+        lines.next();
+
+        let mut ts: HashMap<Vec<char>, char> = HashMap::new();
+        loop {
+            if let Some(l) = lines.next() {
+                let cs: Vec<_> = l.chars().collect();
+                let t1 = cs[0..5].to_vec();
+                let t2 = cs[9];
+                ts.insert(t1, t2);
+            } else {
+                break;
+            }
+        }
+
+        let mut pots = Pots {
+            state: state,
+            ts: ts,
+            start: 0,
+            tick: 0,
+        };
+
+        for _ in 0..20 {
+            pots.step();
+        }
+        let a = pots.checksum();
+
+        let mut last: String = String::new();
+        loop {
+            pots.step();
+            let next = pots.pattern();
+            if next == last {
+                break;
+            }
+            last = next;
+        }
+        let c1 = pots.checksum() as i64;
+        pots.step();
+        let c2 = pots.checksum() as i64;
+        let dc = c2 - c1;
+
+        let b = c2 + dc * (50000000000 - pots.tick as i64);
+
+        (a, b)
     }
 }
 
@@ -884,5 +990,13 @@ mod tests {
         let (a, b) = day11::run(&input);
         assert_eq!(a, (235, 22));
         assert_eq!(b, (231, 135, 8));
+    }
+
+    #[test]
+    fn test_day12() {
+        let input = read_input(12).unwrap();
+        let (a, b) = day12::run(&input);
+        assert_eq!(a, 1672);
+        assert_eq!(b, 1650000000055);
     }
 }
