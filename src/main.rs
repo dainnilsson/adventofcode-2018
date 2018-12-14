@@ -815,14 +815,169 @@ mod day12 {
 }
 
 mod day13 {
-    pub fn run(_input: &str) -> (usize, usize) {
-        unimplemented!();
+    use std::collections::BTreeMap;
+
+    struct Cart {
+        dir: u8,
+        state: u8,
+        crashed: bool,
+    }
+
+    impl Cart {
+        fn next_pos(&self, y: usize, x: usize) -> (usize, usize) {
+            match self.dir {
+                0 => (y - 1, x),
+                1 => (y, x + 1),
+                2 => (y + 1, x),
+                3 => (y, x - 1),
+                _ => unreachable!(),
+            }
+        }
+
+        fn orient(&mut self, track: char) {
+            match track {
+                '/' => self.dir ^= 0b01,
+                '\\' => self.dir ^= 0b11,
+                '+' => {
+                    self.dir = (self.dir
+                        + match self.state {
+                            0 => 3,
+                            2 => 1,
+                            _ => 0,
+                        })
+                        % 4;
+                    self.state = (self.state + 1) % 3;
+                }
+                _ => (),
+            }
+        }
+    }
+
+    fn step(track: &Vec<Vec<char>>, carts: &mut BTreeMap<(usize, usize), Cart>) {
+        for (y, x) in carts.keys().cloned().collect::<Vec<(usize, usize)>>() {
+            let mut c = carts.remove(&(y, x)).unwrap();
+            if !c.crashed {
+                let new_yx = c.next_pos(y, x);
+                if carts.contains_key(&new_yx) {
+                    c.crashed = true;
+                } else {
+                    c.orient(track[new_yx.0][new_yx.1]);
+                }
+                carts.insert(new_yx, c);
+            } else {
+                carts.insert((y, x), c);
+            }
+        }
+    }
+
+    pub fn run(input: &str) -> ((usize, usize), (usize, usize)) {
+        let mut track: Vec<Vec<char>> = input.lines().map(|l| l.chars().collect()).collect();
+
+        let mut carts: BTreeMap<(usize, usize), Cart> = BTreeMap::new();
+        for y in 0..track.len() {
+            for x in 0..track[y].len() {
+                if let Some(dir) = match track[y][x] {
+                    '^' => Some(0),
+                    '>' => Some(1),
+                    'v' => Some(2),
+                    '<' => Some(3),
+                    _ => None,
+                } {
+                    track[y][x] = if dir % 2 == 0 { '|' } else { '-' };
+                    carts.insert(
+                        (y, x),
+                        Cart {
+                            dir: dir,
+                            state: 0,
+                            crashed: false,
+                        },
+                    );
+                }
+            }
+        }
+
+        while !carts.values().any(|c| c.crashed) {
+            step(&track, &mut carts);
+        }
+
+        let crashed = carts.iter().find(|(_, c)| c.crashed).unwrap().0;
+        let a = (crashed.1, crashed.0);
+
+        while carts.values().filter(|c| !c.crashed).count() > 1 {
+            carts = carts.into_iter().filter(|(_, c)| !c.crashed).collect();
+            step(&track, &mut carts);
+        }
+
+        let alive = carts.iter().find(|(_, c)| !c.crashed).unwrap().0;
+        let b = (alive.1, alive.0);
+
+        (a, b)
     }
 }
 
 mod day14 {
-    pub fn run(_input: &str) -> (usize, usize) {
-        unimplemented!();
+    use std::collections::LinkedList;
+
+    struct Recipes {
+        rs: Vec<usize>,
+        e1: usize,
+        e2: usize,
+        len: usize,
+    }
+
+    impl Recipes {
+        fn new() -> Self {
+            Recipes {
+                rs: vec![3, 7],
+                e1: 0,
+                e2: 1,
+                len: 2,
+            }
+        }
+
+        fn ensure(&mut self, n: usize) {
+            while self.len < n {
+                let s = self.rs[self.e1] + self.rs[self.e2];
+                if s > 9 {
+                    self.rs.push(s / 10);
+                    self.rs.push(s % 10);
+                    self.len += 2;
+                } else {
+                    self.rs.push(s);
+                    self.len += 1;
+                }
+                self.e1 = (self.e1 + self.rs[self.e1] + 1) % self.len;
+                self.e2 = (self.e2 + self.rs[self.e2] + 1) % self.len;
+            }
+        }
+    }
+
+    pub fn run(input: &str) -> (usize, usize) {
+        let n = input.trim().parse::<usize>().unwrap();
+        let mut rs = Recipes::new();
+
+        rs.ensure(10 + n);
+        let a = rs.rs.iter().skip(n).take(10).fold(0, |acc, x| acc * 10 + x);
+
+        let compare: LinkedList<usize> = input
+            .trim()
+            .chars()
+            .map(|c| c.to_digit(10).unwrap() as usize)
+            .collect();
+
+        let n2 = compare.len();
+        let mut rs = Recipes::new();
+        rs.ensure(n2);
+        let mut current: LinkedList<usize> = rs.rs.iter().take(n2).cloned().collect();
+        let mut i = 0;
+        while current != compare {
+            i += 1;
+            rs.ensure(i + n2);
+            current.pop_front();
+            current.push_back(rs.rs[i + n2 - 1]);
+        }
+
+        (a, i)
     }
 }
 
@@ -998,5 +1153,21 @@ mod tests {
         let (a, b) = day12::run(&input);
         assert_eq!(a, 1672);
         assert_eq!(b, 1650000000055);
+    }
+
+    #[test]
+    fn test_day13() {
+        let input = read_input(13).unwrap();
+        let (a, b) = day13::run(&input);
+        assert_eq!(a, (118, 66));
+        assert_eq!(b, (70, 129));
+    }
+
+    #[test]
+    fn test_day14() {
+        let input = read_input(14).unwrap();
+        let (a, b) = day14::run(&input);
+        assert_eq!(a, 6126491027);
+        assert_eq!(b, 20191616);
     }
 }
