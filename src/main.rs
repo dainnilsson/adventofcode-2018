@@ -916,8 +916,6 @@ mod day13 {
 }
 
 mod day14 {
-    use std::collections::LinkedList;
-
     struct Recipes {
         rs: Vec<usize>,
         e1: usize,
@@ -959,7 +957,7 @@ mod day14 {
         rs.ensure(10 + n);
         let a = rs.rs.iter().skip(n).take(10).fold(0, |acc, x| acc * 10 + x);
 
-        let compare: LinkedList<usize> = input
+        let compare: Vec<_> = input
             .trim()
             .chars()
             .map(|c| c.to_digit(10).unwrap() as usize)
@@ -968,13 +966,10 @@ mod day14 {
         let n2 = compare.len();
         let mut rs = Recipes::new();
         rs.ensure(n2);
-        let mut current: LinkedList<usize> = rs.rs.iter().take(n2).cloned().collect();
         let mut i = 0;
-        while current != compare {
+        while *compare != rs.rs[i..i + n2] {
             i += 1;
             rs.ensure(i + n2);
-            current.pop_front();
-            current.push_back(rs.rs[i + n2 - 1]);
         }
 
         (a, i)
@@ -982,26 +977,555 @@ mod day14 {
 }
 
 mod day15 {
-    pub fn run(_input: &str) -> (usize, usize) {
+    use std::collections::{BTreeMap, HashSet};
+    use std::fmt;
+
+    type Pos = (usize, usize);
+
+    fn adjacent(pos: &Pos) -> impl Iterator<Item = Pos> + '_ {
+        let (y, x) = pos;
+        static ADJ: &[(isize, isize)] = &[(-1, 0), (0, -1), (0, 1), (1, 0)];
+        ADJ.iter()
+            .map(move |(dy, dx)| ((*y as isize + dy) as usize, (*x as isize + dx) as usize))
+    }
+
+    struct Unit {
+        race: char,
+        hp: u8,
+    }
+
+    impl Unit {
+        fn new(race: char) -> Self {
+            Unit {
+                race: race,
+                hp: 200,
+            }
+        }
+    }
+
+    struct Cave {
+        map: Vec<Vec<char>>,
+        units: BTreeMap<Pos, Unit>,
+    }
+
+    impl Cave {
+        fn parse(input: &str) -> Self {
+            let mut map: Vec<Vec<char>> = input.lines().map(|l| l.chars().collect()).collect();
+            let mut units: BTreeMap<Pos, Unit> = BTreeMap::new();
+            for y in 0..map.len() {
+                for x in 0..map[y].len() {
+                    if let Some(race) = match map[y][x] {
+                        'G' => Some('G'),
+                        'E' => Some('E'),
+                        _ => None,
+                    } {
+                        map[y][x] = '.';
+                        units.insert((y, x), Unit::new(race));
+                    }
+                }
+            }
+
+            Cave {
+                map: map,
+                units: units,
+            }
+        }
+
+        fn find_move(&self, start: Pos, unit: &Unit) -> Pos {
+            let race = unit.race;
+            let mut explored = HashSet::new();
+            let mut unexplored: Vec<_> = adjacent(&start).map(|p| (p, p)).collect();
+
+            while unexplored.len() > 0 {
+                let ((y, x), step) = unexplored.remove(0);
+                if explored.insert((y, x)) {
+                    if let Some(o) = self.units.get(&(y, x)) {
+                        if o.race != race {
+                            return if step != (y, x) { step } else { start };
+                        }
+                    } else if self.map[y][x] == '.' {
+                        adjacent(&(y, x)).for_each(|p| {
+                            unexplored.push((p, step));
+                        });
+                    }
+                }
+            }
+            start
+        }
+
+        fn target(&self, pos: Pos, unit: &Unit) -> Option<Pos> {
+            let race = unit.race;
+            let mut target = None;
+            let mut low_hp = 201;
+            for p in adjacent(&pos) {
+                if let Some(o) = self.units.get(&p) {
+                    if o.race != race {
+                        if o.hp < low_hp {
+                            target = Some(p);
+                            low_hp = o.hp;
+                        }
+                    }
+                }
+            }
+            target
+        }
+
+        fn step(&mut self) {
+            let mut moved: HashSet<Pos> = HashSet::new();
+            for pos in self.units.keys().cloned().collect::<Vec<(usize, usize)>>() {
+                if moved.insert(pos) {
+                    if let Some(unit) = self.units.remove(&pos) {
+                        let new_pos = self.find_move(pos, &unit);
+                        if let Some(target) = self.target(new_pos, &unit) {
+                            let mut enemy = self.units.remove(&target).unwrap();
+                            enemy.hp = enemy.hp.saturating_sub(3);
+                            if enemy.hp > 0 {
+                                self.units.insert(target, enemy);
+                            } else {
+                                moved.insert(target);
+                            }
+                        }
+                        self.units.insert(new_pos, unit);
+                    }
+                }
+            }
+        }
+
+        fn is_over(&self) -> bool {
+            self.units
+                .values()
+                .map(|u| u.race)
+                .collect::<HashSet<_>>()
+                .len()
+                < 2
+        }
+    }
+
+    impl fmt::Debug for Cave {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            for y in 0..self.map.len() {
+                let mut row = String::new();
+                for x in 0..self.map[y].len() {
+                    row.push(if let Some(unit) = self.units.get(&(y, x)) {
+                        unit.race
+                    } else {
+                        self.map[y][x]
+                    });
+                }
+                write!(f, "{}\n", row)?
+            }
+            Ok(())
+        }
+    }
+
+    pub fn run(input: &str) -> (usize, usize) {
+        let mut cave = Cave::parse(input);
+        println!("{:?}", cave);
+        let mut tick = 0;
+        while !cave.is_over() {
+            tick += 1;
+            //println!("tick: {}", tick);
+            cave.step();
+        }
+        println!("{:?}", cave);
+        let a = cave.units.values().map(|u| u.hp as u32).sum::<u32>();
+        println!("{} * {} = {}", (tick - 1), a, (tick - 1) * a);
         unimplemented!();
     }
 }
 
 mod day16 {
-    pub fn run(_input: &str) -> (usize, usize) {
-        unimplemented!();
+    use self::Op::*;
+    use self::Read::*;
+    use std::collections::HashSet;
+
+    #[derive(Debug, PartialEq, Eq, Hash)]
+    enum Read {
+        Reg,
+        Imm,
+    }
+
+    impl Read {
+        fn get(&self, val: usize, regs: &[i32]) -> i32 {
+            match self {
+                Reg => regs[val],
+                Imm => val as i32,
+            }
+        }
+    }
+
+    #[derive(Debug, PartialEq, Eq, Hash)]
+    enum Op {
+        Add(Read),
+        Mul(Read),
+        Ban(Read),
+        Bor(Read),
+        Set(Read),
+        Gtt(Read, Read),
+        Equ(Read, Read),
+    }
+
+    static OPS: &'static [Op] = &[
+        Add(Reg),
+        Add(Imm),
+        Mul(Reg),
+        Mul(Imm),
+        Ban(Reg),
+        Ban(Imm),
+        Bor(Reg),
+        Bor(Imm),
+        Set(Reg),
+        Set(Imm),
+        Gtt(Imm, Reg),
+        Gtt(Reg, Imm),
+        Gtt(Reg, Reg),
+        Equ(Imm, Reg),
+        Equ(Reg, Imm),
+        Equ(Reg, Reg),
+    ];
+
+    impl Op {
+        fn exec(&self, a: usize, b: usize, c: usize, regs: &Vec<i32>) -> Vec<i32> {
+            let mut ret = regs.clone();
+            match self {
+                Add(read) => ret[c] = Reg.get(a, regs) + read.get(b, regs),
+                Mul(read) => ret[c] = Reg.get(a, regs) * read.get(b, regs),
+                Ban(read) => ret[c] = Reg.get(a, regs) & read.get(b, regs),
+                Bor(read) => ret[c] = Reg.get(a, regs) | read.get(b, regs),
+                Set(read) => ret[c] = read.get(a, regs),
+                Gtt(read_a, read_b) => {
+                    ret[c] = if read_a.get(a, regs) > read_b.get(b, regs) {
+                        1
+                    } else {
+                        0
+                    }
+                }
+                Equ(read_a, read_b) => {
+                    ret[c] = if read_a.get(a, regs) == read_b.get(b, regs) {
+                        1
+                    } else {
+                        0
+                    }
+                }
+            }
+            ret
+        }
+    }
+
+    pub fn run(input: &str) -> (usize, i32) {
+        let mut a = 0;
+        let mut codes: Vec<HashSet<&Op>> = (0..16).map(|_| OPS.iter().collect()).collect();
+        let mut lines = input.lines();
+        loop {
+            let regs = lines.next().unwrap();
+            if regs == "" {
+                break;
+            }
+            let regs: Vec<i32> = regs
+                .split_at(9)
+                .1
+                .split_at(10)
+                .0
+                .split(", ")
+                .map(|x| x.parse().unwrap())
+                .collect();
+            let args: Vec<usize> = lines
+                .next()
+                .unwrap()
+                .split(' ')
+                .map(|x| x.parse().unwrap())
+                .collect();
+            let out: Vec<i32> = lines
+                .next()
+                .unwrap()
+                .split_at(9)
+                .1
+                .split_at(10)
+                .0
+                .split(", ")
+                .map(|x| x.parse().unwrap())
+                .collect();
+            lines.next();
+            if OPS
+                .iter()
+                .filter(|op| op.exec(args[1], args[2], args[3], &regs) == out)
+                .count()
+                >= 3
+            {
+                a += 1;
+            }
+            let new_codes: HashSet<&Op> = codes[args[0]]
+                .iter()
+                .cloned()
+                .filter(|op| op.exec(args[1], args[2], args[3], &regs) == out)
+                .collect();
+            codes[args[0]] = new_codes;
+        }
+
+        lines.next();
+
+        let mut old_state: Vec<_> = codes.iter().map(|ops| ops.len()).collect();
+        let mut new_state: Vec<usize> = vec![];
+        while old_state != new_state {
+            for op in OPS {
+                if codes.iter().any(|ops| ops.len() == 1 && ops.contains(op)) {
+                    for ops in codes.iter_mut() {
+                        if ops.len() > 1 && ops.contains(op) {
+                            ops.remove(op);
+                        }
+                    }
+                }
+            }
+
+            old_state = new_state;
+            new_state = codes.iter().map(|ops| ops.len()).collect();
+        }
+        let codes: Vec<_> = codes.iter().map(|ops| ops.iter().next().unwrap()).collect();
+        let mut regs = vec![0, 0, 0, 0];
+        while let Some(l) = lines.next() {
+            let args: Vec<usize> = l.split(' ').map(|x| x.parse().unwrap()).collect();
+            regs = codes[args[0]].exec(args[1], args[2], args[3], &regs)
+        }
+        let b = regs[0];
+
+        (a, b)
     }
 }
 
 mod day17 {
-    pub fn run(_input: &str) -> (usize, usize) {
-        unimplemented!();
+    use std::collections::HashSet;
+    use std::cmp::{max, min};
+    use std::usize::MAX;
+    use std::fmt;
+
+    type Pos = (usize, usize);
+
+    struct Map {
+        clay: HashSet<Pos>,
+        running: HashSet<Pos>,
+        still: HashSet<Pos>,
+        min_y: usize,
+        max_y: usize,
+    }
+
+    impl Map {
+        fn parse(input: &str) -> Self {
+            let mut clay: HashSet<Pos> = HashSet::new();
+            let mut min_y = MAX;
+            let mut max_y = 0;
+            for line in input.lines() {
+                let v = line.starts_with("x");
+                let mut parts = line.split(", ");
+                let a: usize = parts.next().unwrap()[2..].parse().unwrap();
+                let mut range = parts.next().unwrap()[2..].split("..");
+                let b: usize = range.next().unwrap().parse().unwrap();
+                let c: usize = range.next().unwrap().parse().unwrap();
+                for i in b..=c {
+                    if v {
+                        clay.insert((a, i));
+                        min_y = min(min_y, i);
+                        max_y = max(max_y, i);
+                    } else {
+                        clay.insert((i, a));
+                        min_y = min(min_y, a);
+                        max_y = max(max_y, a);
+                    }
+                }
+            }
+            let mut running = HashSet::new();
+            running.insert((500, 0));
+            Map {
+                clay: clay,
+                running: running,
+                still: HashSet::new(),
+                min_y: min_y,
+                max_y: max_y,
+            }
+        }
+
+        fn empty(&self, pos: Pos) -> bool {
+            !self.clay.contains(&pos) && !self.still.contains(&pos) && !self.running.contains(&pos)
+        }
+
+        fn go(&mut self) {
+            let mut active = vec![(500, 1)];
+            while let Some((x, y)) = active.pop() {
+                let mut x = x;
+                let mut y = y;
+                loop {
+                    self.running.insert((x, y));
+                    if !self.clay.contains(&(x, y+1)) && !self.still.contains(&(x, y+1)) {
+                        if y < self.max_y {
+                            y += 1;
+                        } else {
+                            break;
+                        }
+                    } else if self.empty((x+1, y)) {
+                        if !self.running.contains(&(x-1, y)) {
+                            active.push((x, y));
+                        }
+                        x += 1;
+                    } else if self.empty((x-1, y)) {
+                        x -= 1;
+                    } else if self.clay.contains(&(x-1, y)) {
+                        let mut w = x;
+                        while self.running.contains(&(w+1, y)) {
+                            w += 1;
+                        }
+                        if self.clay.contains(&(w+1, y)) {
+                            for i in x..=w {
+                                self.running.remove(&(i, y));
+                                self.still.insert((i, y));
+                                if self.running.contains(&(i, y-1)) {
+                                    active.push((i, y-1));
+                                }
+                            }
+                        }
+                        break;
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+    }
+
+    impl fmt::Debug for Map {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            let mut min_x = MAX;
+            let mut max_x = 0;
+            for &(x, _) in &self.clay {
+                min_x = min(min_x, x);
+                max_x = max(max_x, x);
+            }
+            for y in self.min_y..=self.max_y {
+                let mut row = String::new();
+                for x in (min_x-1)..=(max_x+1) {
+                    let p = (x, y);
+                    if self.clay.contains(&p) {
+                        row.push('#');
+                    } else if self.running.contains(&p) {
+                        row.push('|');
+                    } else if self.still.contains(&p) {
+                        row.push('~');
+                    } else {
+                        row.push('.');
+                    }
+                }
+                write!(f, "{}\n", row)?
+            }
+            Ok(())
+        }
+    }
+
+    pub fn run(input: &str) -> (usize, usize) {
+        let mut map = Map::parse(input);
+        map.go();
+        //println!("{:?}", map);
+
+        let a = map.running.len() + map.still.len() - map.min_y;
+        let b = map.still.len();
+        (a, b)
     }
 }
 
 mod day18 {
-    pub fn run(_input: &str) -> (usize, usize) {
-        unimplemented!();
+    use std::collections::HashSet;
+    use std::cmp::min;
+
+    fn adjacent(map: &Vec<Vec<char>>, x:usize, y:usize) -> Vec<char> {
+        let min_y = y.saturating_sub(1);
+        let min_x = x.saturating_sub(1);
+        let max_y = min(49, y+1);
+        let max_x = min(49, x+1);
+
+        (min_y..=max_y).flat_map(|j| {
+            (min_x..=max_x).map(move |i| (i, j))
+        })
+        .filter(|&p| p != (x, y))
+        .map(|(i, j)| map[j][i])
+        .collect()
+    }
+
+    fn next_state(map: &Vec<Vec<char>>, x: usize, y: usize) -> char {
+        let around = adjacent(map, x, y);
+        match map[y][x] {
+            '.' => {
+                if around.iter().filter(|&x| x == &'|').count() >= 3 {
+                    '|'
+                } else {
+
+                    '.'
+                }
+            },
+            '|' => {
+                if around.iter().filter(|&x| x == &'#').count() >= 3 {
+                    '#'
+                } else {
+                    '|'
+                }
+            },
+            '#' => {
+                if around.iter().any(|&x| x == '#') && around.iter().any(|&x| x == '|') {
+                    '#'
+                } else {
+                    '.'
+                }
+            },
+            _ => '?'
+        }
+    }
+
+    fn tick(map: &Vec<Vec<char>>) -> Vec<Vec<char>> {
+        let mut next: Vec<Vec<char>> = vec![];
+        for y in 0..50 {
+            let mut row: Vec<char> = vec![];
+            for x in 0..50 {
+                row.push(next_state(map, x, y));
+            }
+            next.push(row);
+        }
+        next
+    }
+
+    fn value(map: &Vec<Vec<char>>) -> usize {
+        let wood: usize = map.iter().map(|row| row.iter().filter(|&x| x == &'|').count()).sum();
+        let lumber: usize = map.iter().map(|row| row.iter().filter(|&x| x == &'#').count()).sum();
+        wood * lumber
+    }
+
+    pub fn run(input: &str) -> (usize, usize) {
+        let mut map: Vec<Vec<char>> = input.lines().map(|l| l.chars().collect()).collect();
+        let mut t = 10;
+        for _ in 0..t {
+            map = tick(&map);
+        }
+        let a = value(&map);
+
+        let mut seen = HashSet::new();
+        while seen.insert(map.clone()) {
+            map = tick(&map);
+            t += 1;
+        }
+
+        let start = t;
+        let target = map.clone();
+        map = tick(&map);
+        t += 1;
+
+        while map != target {
+            map = tick(&map);
+            t += 1;
+        }
+
+        let cycle = t - start;
+        let remaining = (1000000000 - t) % cycle;
+        for _ in 0..remaining {
+            map = tick(&map);
+        }
+        let b = value(&map);
+
+        (a, b)
     }
 }
 
@@ -1169,5 +1693,37 @@ mod tests {
         let (a, b) = day14::run(&input);
         assert_eq!(a, 6126491027);
         assert_eq!(b, 20191616);
+    }
+
+    #[test]
+    fn test_day15() {
+        let input = read_input(15).unwrap();
+        let (a, b) = day15::run(&input);
+        assert_eq!(a, 0);
+        assert_eq!(b, 0);
+    }
+
+    #[test]
+    fn test_day16() {
+        let input = read_input(16).unwrap();
+        let (a, b) = day16::run(&input);
+        assert_eq!(a, 651);
+        assert_eq!(b, 706);
+    }
+
+    #[test]
+    fn test_day17() {
+        let input = read_input(17).unwrap();
+        let (a, b) = day17::run(&input);
+        assert_eq!(a, 34291);
+        assert_eq!(b, 28487);
+    }
+
+    #[test]
+    fn test_day18() {
+        let input = read_input(18).unwrap();
+        let (a, b) = day18::run(&input);
+        assert_eq!(a, 574590);
+        assert_eq!(b, 183787);
     }
 }
