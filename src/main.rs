@@ -1583,8 +1583,118 @@ mod day18 {
 }
 
 mod day19 {
-    pub fn run(_input: &str) -> (usize, usize) {
-        unimplemented!();
+    use self::Op::*;
+    use self::Read::*;
+
+    #[derive(Debug, PartialEq, Eq, Hash)]
+    enum Read {
+        Reg,
+        Imm,
+    }
+
+    impl Read {
+        fn get(&self, val: usize, regs: &[i32]) -> i32 {
+            match self {
+                Reg => regs[val],
+                Imm => val as i32,
+            }
+        }
+    }
+
+    #[derive(Debug, PartialEq, Eq, Hash)]
+    enum Op {
+        Add(Read),
+        Mul(Read),
+        Ban(Read),
+        Bor(Read),
+        Set(Read),
+        Gtt(Read, Read),
+        Equ(Read, Read),
+    }
+
+    impl Op {
+        fn exec(&self, a: usize, b: usize, c: usize, regs: &Vec<i32>) -> Vec<i32> {
+            let mut ret = regs.clone();
+            match self {
+                Add(read) => ret[c] = Reg.get(a, regs) + read.get(b, regs),
+                Mul(read) => ret[c] = Reg.get(a, regs) * read.get(b, regs),
+                Ban(read) => ret[c] = Reg.get(a, regs) & read.get(b, regs),
+                Bor(read) => ret[c] = Reg.get(a, regs) | read.get(b, regs),
+                Set(read) => ret[c] = read.get(a, regs),
+                Gtt(read_a, read_b) => {
+                    ret[c] = if read_a.get(a, regs) > read_b.get(b, regs) {
+                        1
+                    } else {
+                        0
+                    }
+                }
+                Equ(read_a, read_b) => {
+                    ret[c] = if read_a.get(a, regs) == read_b.get(b, regs) {
+                        1
+                    } else {
+                        0
+                    }
+                }
+            }
+            ret
+        }
+
+        fn get(word: &str) -> Self {
+            match word {
+                "addr" => Add(Reg),
+                "addi" => Add(Imm),
+                "mulr" => Mul(Reg),
+                "muli" => Mul(Imm),
+                "banr" => Ban(Reg),
+                "bani" => Ban(Imm),
+                "borr" => Bor(Reg),
+                "bori" => Bor(Imm),
+                "setr" => Set(Reg),
+                "seti" => Set(Imm),
+                "gtrr" => Gtt(Reg, Reg),
+                "gtri" => Gtt(Reg, Imm),
+                "gtir" => Gtt(Imm, Reg),
+                "eqrr" => Equ(Reg, Reg),
+                "eqri" => Equ(Reg, Imm),
+                "eqir" => Equ(Imm, Reg),
+                _ => panic!("Unsupported instruction")
+            }
+        }
+    }
+
+    pub fn run(input: &str) -> (i32, i32) {
+        let mut lines = input.lines();
+        let pcr: usize = lines.next().unwrap().split(" ").nth(1).unwrap().parse().unwrap();
+        let code: Vec<_> = lines.map(|line| {
+            let parts: Vec<_> = line.split(' ').collect();
+            let op = Op::get(parts[0]);
+            let a: usize = parts[1].parse().unwrap();
+            let b: usize = parts[2].parse().unwrap();
+            let c: usize = parts[3].parse().unwrap();
+            (op, a, b, c)
+        }).collect();
+
+        let mut regs: Vec<i32> = vec![0, 0, 0, 0, 0, 0];
+        while let Some(ins) = &code.get(regs[pcr] as usize) {
+            regs = ins.0.exec(ins.1, ins.2, ins.3, &regs);
+            regs[pcr] += 1;
+        }
+        let a = regs[0];
+
+        let mut ttl = code.len();
+        let mut regs: Vec<i32> = vec![1, 0, 0, 0, 0, 0];
+        while let Some(ins) = &code.get(regs[pcr] as usize) {
+            regs = ins.0.exec(ins.1, ins.2, ins.3, &regs);
+            regs[pcr] += 1;
+            ttl -= 1;
+            if ttl == 0 {
+                break;
+            }
+        }
+
+        let r5 = regs[5];
+        let b = (1..=r5).filter(|r2| r5 % r2 == 0).sum();
+        (a, b)
     }
 }
 
@@ -1778,5 +1888,13 @@ mod tests {
         let (a, b) = day18::run(&input);
         assert_eq!(a, 574590);
         assert_eq!(b, 183787);
+    }
+
+    #[test]
+    fn test_day19() {
+        let input = read_input(19).unwrap();
+        let (a, b) = day19::run(&input);
+        assert_eq!(a, 2040);
+        assert_eq!(b, 25165632);
     }
 }
