@@ -1189,13 +1189,13 @@ mod day16 {
     use std::collections::HashSet;
 
     #[derive(Debug, PartialEq, Eq, Hash)]
-    enum Read {
+    pub enum Read {
         Reg,
         Imm,
     }
 
     impl Read {
-        fn get(&self, val: usize, regs: &[i32]) -> i32 {
+        pub fn get(&self, val: usize, regs: &[i32]) -> i32 {
             match self {
                 Reg => regs[val],
                 Imm => val as i32,
@@ -1204,7 +1204,7 @@ mod day16 {
     }
 
     #[derive(Debug, PartialEq, Eq, Hash)]
-    enum Op {
+    pub enum Op {
         Add(Read),
         Mul(Read),
         Ban(Read),
@@ -1234,7 +1234,7 @@ mod day16 {
     ];
 
     impl Op {
-        fn exec(&self, a: usize, b: usize, c: usize, regs: &Vec<i32>) -> Vec<i32> {
+        pub fn exec(&self, a: usize, b: usize, c: usize, regs: &Vec<i32>) -> Vec<i32> {
             let mut ret = regs.clone();
             match self {
                 Add(read) => ret[c] = Reg.get(a, regs) + read.get(b, regs),
@@ -1583,63 +1583,12 @@ mod day18 {
 }
 
 mod day19 {
-    use self::Op::*;
-    use self::Read::*;
-
-    #[derive(Debug, PartialEq, Eq, Hash)]
-    enum Read {
-        Reg,
-        Imm,
-    }
-
-    impl Read {
-        fn get(&self, val: usize, regs: &[i32]) -> i32 {
-            match self {
-                Reg => regs[val],
-                Imm => val as i32,
-            }
-        }
-    }
-
-    #[derive(Debug, PartialEq, Eq, Hash)]
-    enum Op {
-        Add(Read),
-        Mul(Read),
-        Ban(Read),
-        Bor(Read),
-        Set(Read),
-        Gtt(Read, Read),
-        Equ(Read, Read),
-    }
+    use super::day16::Op;
+    use super::day16::Op::*;
+    use super::day16::Read::*;
 
     impl Op {
-        fn exec(&self, a: usize, b: usize, c: usize, regs: &Vec<i32>) -> Vec<i32> {
-            let mut ret = regs.clone();
-            match self {
-                Add(read) => ret[c] = Reg.get(a, regs) + read.get(b, regs),
-                Mul(read) => ret[c] = Reg.get(a, regs) * read.get(b, regs),
-                Ban(read) => ret[c] = Reg.get(a, regs) & read.get(b, regs),
-                Bor(read) => ret[c] = Reg.get(a, regs) | read.get(b, regs),
-                Set(read) => ret[c] = read.get(a, regs),
-                Gtt(read_a, read_b) => {
-                    ret[c] = if read_a.get(a, regs) > read_b.get(b, regs) {
-                        1
-                    } else {
-                        0
-                    }
-                }
-                Equ(read_a, read_b) => {
-                    ret[c] = if read_a.get(a, regs) == read_b.get(b, regs) {
-                        1
-                    } else {
-                        0
-                    }
-                }
-            }
-            ret
-        }
-
-        fn get(word: &str) -> Self {
+       fn get(word: &str) -> Self {
             match word {
                 "addr" => Add(Reg),
                 "addi" => Add(Imm),
@@ -1699,8 +1648,38 @@ mod day19 {
 }
 
 mod day20 {
-    pub fn run(_input: &str) -> (usize, usize) {
-        unimplemented!();
+    use std::collections::HashMap;
+
+    pub fn run(input: &str) -> (u32, usize) {
+        let mut pos = (0, 0);
+        let mut dist = 0;
+        let mut visited: HashMap<(i32, i32), u32> = HashMap::new();
+        visited.insert(pos, dist);
+        let mut queue: Vec<(i32, i32)> = vec![];
+
+        for c in input.chars() {
+            match c {
+                'N' => { pos.1 -= 1; },
+                'S' => { pos.1 += 1; },
+                'W' => { pos.0 -= 1; },
+                'E' => { pos.0 += 1; },
+                '(' => { queue.push(pos); },
+                ')' => { queue.pop(); },
+                '|' => { pos = queue[queue.len()-1]; },
+                _ => ()
+            }
+            if visited.contains_key(&pos) {
+                dist = visited[&pos];
+            } else {
+                dist += 1;
+                visited.insert(pos, dist);
+            }
+        }
+
+        let a = *visited.values().max().unwrap();
+        let b = visited.values().filter(|&d| *d >= 1000).count();
+
+        (a, b)
     }
 }
 
@@ -1896,5 +1875,13 @@ mod tests {
         let (a, b) = day19::run(&input);
         assert_eq!(a, 2040);
         assert_eq!(b, 25165632);
+    }
+
+    #[test]
+    fn test_day20() {
+        let input = read_input(20).unwrap();
+        let (a, b) = day20::run(&input);
+        assert_eq!(a, 3983);
+        assert_eq!(b, 8486);
     }
 }
