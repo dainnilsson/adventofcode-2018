@@ -1690,8 +1690,128 @@ mod day21 {
 }
 
 mod day22 {
-    pub fn run(_input: &str) -> (usize, usize) {
-        unimplemented!();
+    use self::Tool::*;
+    use self::Ground::*;
+    use std::collections::{HashMap, BTreeSet};
+    type Pos = (u32, u32);
+
+    #[derive(Debug)]
+    enum Ground {
+        ROCKY,
+        WET,
+        NARROW,
+    }
+
+    #[derive(Debug, Ord, PartialOrd, PartialEq, Eq, Copy, Clone, Hash)]
+    enum Tool {
+        NEITHER,
+        TORCH,
+        CLIMB,
+    }
+
+    struct Cave {
+        depth: u32,
+        target: Pos,
+        cache_erosion: HashMap<Pos, u32>,
+    }
+
+    impl Cave {
+        fn erosion(&mut self, pos: Pos) -> u32 {
+            if let Some(res) = self.cache_erosion.get(&pos) {
+                *res
+            } else {
+                let e = (self.geologic(pos) + self.depth) % 20183;
+                self.cache_erosion.insert(pos, e);
+                e
+            }
+        }
+
+        fn geologic(&mut self, pos: Pos) -> u32 {
+            match pos {
+                (0, 0) => 0,
+                p if p == self.target => 0,
+                (x, 0) => x * 16807,
+                (0, y) => y * 48271,
+                (x, y) => self.erosion((x-1, y)) * self.erosion((x, y-1))
+            }
+        }
+
+        fn risk(&mut self) -> u32 {
+            let x = self.target.0;
+            let y = self.target.1;
+            (0..=x)
+                .flat_map(move |x| (0..=y).map(move |y| (x, y)))
+                .map(move |p| self.erosion(p) % 3)
+                .sum()
+        }
+
+        fn ground(&mut self, pos: Pos) -> Ground {
+            match self.erosion(pos) % 3 {
+                0 => ROCKY,
+                1 => WET,
+                2 => NARROW,
+                _ => panic!(),
+            }
+        }
+
+        fn is_legal(&mut self, pos: Pos, tool: Tool) -> bool {
+            match self.ground(pos) {
+                ROCKY => tool != NEITHER,
+                WET => tool != TORCH,
+                NARROW => tool != CLIMB,
+            }
+        }
+
+    }
+
+    pub fn run(input: &str) -> (u32, u32) {
+        let mut lines = input.lines();
+        let depth = lines.next().unwrap().split(' ').skip(1).next().unwrap().parse().unwrap();
+        let mut t = lines.next().unwrap().split(' ').skip(1).next().unwrap().split(',');
+        let mut cave = Cave {
+            depth: depth,
+            target: (t.next().unwrap().parse().unwrap(), t.next().unwrap().parse().unwrap()),
+            cache_erosion: HashMap::new(),
+        };
+        let a = cave.risk();
+
+        let mut b = 0;
+        let mut explored: HashMap<(Pos, Tool), u32> = HashMap::new();
+        let mut unexplored: BTreeSet<(u32, Pos, Tool)> = BTreeSet::new();
+        unexplored.insert((0, (0, 0), TORCH));
+        while let Some((time, pos, tool)) = unexplored.iter().cloned().next() {
+            unexplored.remove(&(time, pos, tool));
+            if !cave.is_legal(pos, tool) {
+                continue;
+            }
+            if cave.target == pos && tool == TORCH {
+                b = time;
+                break;
+            }
+            if let Some(&p_time) = explored.get(&(pos, tool)) {
+                if p_time <= time {
+                    continue;
+                }
+            }
+            explored.insert((pos, tool), time);
+
+            unexplored.insert((time+7, pos, NEITHER));
+            unexplored.insert((time+7, pos, TORCH));
+            unexplored.insert((time+7, pos, CLIMB));
+
+            unexplored.insert((time+1, (pos.0+1, pos.1), tool));
+            if pos.1 + 1 <= cave.depth {
+                unexplored.insert((time+1, (pos.0, pos.1+1), tool));
+            }
+            if pos.0 > 0 {
+                unexplored.insert((time+1, (pos.0-1, pos.1), tool));
+            }
+            if pos.1 > 0 {
+                unexplored.insert((time+1, (pos.0, pos.1-1), tool));
+            }
+        }
+
+        (a, b)
     }
 }
 
@@ -1883,5 +2003,13 @@ mod tests {
         let (a, b) = day20::run(&input);
         assert_eq!(a, 3983);
         assert_eq!(b, 8486);
+    }
+
+    #[test]
+    fn test_day22() {
+        let input = read_input(22).unwrap();
+        let (a, b) = day20::run(&input);
+        assert_eq!(a, 11810);
+        assert_eq!(b, 0);
     }
 }
