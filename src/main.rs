@@ -16,7 +16,7 @@ fn main() {
             Err(_) => println!("Error, can't run day {}", day),
         }
     } else {
-        for i in 1..=24 {
+        for i in 1..=25 {
             if let Ok(res) = run_day(i) {
                 println!("Day {}: {}", i, res);
             }
@@ -53,6 +53,7 @@ fn run_day(i: u32) -> io::Result<String> {
         22 => format!("{:?}", day22::run(&input)),
         23 => format!("{:?}", day23::run(&input)),
         24 => format!("{:?}", day24::run(&input)),
+        25 => format!("{:?}", day25::run(&input)),
         _ => panic!("Day not implemented!"),
     })
 }
@@ -1195,10 +1196,10 @@ mod day16 {
     }
 
     impl Read {
-        pub fn get(&self, val: usize, regs: &[i32]) -> i32 {
+        pub fn get(&self, val: usize, regs: &[usize]) -> usize {
             match self {
                 Reg => regs[val],
-                Imm => val as i32,
+                Imm => val,
             }
         }
     }
@@ -1234,43 +1235,41 @@ mod day16 {
     ];
 
     impl Op {
-        pub fn exec(&self, a: usize, b: usize, c: usize, regs: &Vec<i32>) -> Vec<i32> {
-            let mut ret = regs.clone();
+        pub fn exec(&self, a: usize, b: usize, c: usize, regs: &mut [usize]) {
             match self {
-                Add(read) => ret[c] = Reg.get(a, regs) + read.get(b, regs),
-                Mul(read) => ret[c] = Reg.get(a, regs) * read.get(b, regs),
-                Ban(read) => ret[c] = Reg.get(a, regs) & read.get(b, regs),
-                Bor(read) => ret[c] = Reg.get(a, regs) | read.get(b, regs),
-                Set(read) => ret[c] = read.get(a, regs),
+                Add(read) => regs[c] = Reg.get(a, regs) + read.get(b, regs),
+                Mul(read) => regs[c] = Reg.get(a, regs) * read.get(b, regs),
+                Ban(read) => regs[c] = Reg.get(a, regs) & read.get(b, regs),
+                Bor(read) => regs[c] = Reg.get(a, regs) | read.get(b, regs),
+                Set(read) => regs[c] = read.get(a, regs),
                 Gtt(read_a, read_b) => {
-                    ret[c] = if read_a.get(a, regs) > read_b.get(b, regs) {
+                    regs[c] = if read_a.get(a, regs) > read_b.get(b, regs) {
                         1
                     } else {
                         0
                     }
                 }
                 Equ(read_a, read_b) => {
-                    ret[c] = if read_a.get(a, regs) == read_b.get(b, regs) {
+                    regs[c] = if read_a.get(a, regs) == read_b.get(b, regs) {
                         1
                     } else {
                         0
                     }
                 }
             }
-            ret
         }
     }
 
-    pub fn run(input: &str) -> (usize, i32) {
+    pub fn run(input: &str) -> (usize, usize) {
         let mut a = 0;
         let mut codes: Vec<HashSet<&Op>> = (0..16).map(|_| OPS.iter().collect()).collect();
         let mut lines = input.lines();
         loop {
-            let regs = lines.next().unwrap();
-            if regs == "" {
+            let regsv = lines.next().unwrap();
+            if regsv == "" {
                 break;
             }
-            let regs: Vec<i32> = regs
+            let regsv: Vec<usize> = regsv
                 .split_at(9)
                 .1
                 .split_at(10)
@@ -1278,13 +1277,15 @@ mod day16 {
                 .split(", ")
                 .map(|x| x.parse().unwrap())
                 .collect();
+            let mut regs = [0; 4];
+            regs.copy_from_slice(&regsv[..]);
             let args: Vec<usize> = lines
                 .next()
                 .unwrap()
                 .split(' ')
                 .map(|x| x.parse().unwrap())
                 .collect();
-            let out: Vec<i32> = lines
+            let outv: Vec<usize> = lines
                 .next()
                 .unwrap()
                 .split_at(9)
@@ -1294,10 +1295,16 @@ mod day16 {
                 .split(", ")
                 .map(|x| x.parse().unwrap())
                 .collect();
+            let mut out = [0; 4];
+            out.copy_from_slice(&outv[..]);
             lines.next();
             if OPS
                 .iter()
-                .filter(|op| op.exec(args[1], args[2], args[3], &regs) == out)
+                .filter(|op| {
+                    let mut regs = regs.clone();
+                    op.exec(args[1], args[2], args[3], &mut regs);
+                    regs == out
+                })
                 .count()
                 >= 3
             {
@@ -1306,7 +1313,11 @@ mod day16 {
             let new_codes: HashSet<&Op> = codes[args[0]]
                 .iter()
                 .cloned()
-                .filter(|op| op.exec(args[1], args[2], args[3], &regs) == out)
+                .filter(|op| {
+                    let mut regs = regs.clone();
+                    op.exec(args[1], args[2], args[3], &mut regs);
+                    regs == out
+                })
                 .collect();
             codes[args[0]] = new_codes;
         }
@@ -1330,10 +1341,10 @@ mod day16 {
             new_state = codes.iter().map(|ops| ops.len()).collect();
         }
         let codes: Vec<_> = codes.iter().map(|ops| ops.iter().next().unwrap()).collect();
-        let mut regs = vec![0, 0, 0, 0];
+        let mut regs = [0; 6];
         while let Some(l) = lines.next() {
             let args: Vec<usize> = l.split(' ').map(|x| x.parse().unwrap()).collect();
-            regs = codes[args[0]].exec(args[1], args[2], args[3], &regs)
+            codes[args[0]].exec(args[1], args[2], args[3], &mut regs)
         }
         let b = regs[0];
 
@@ -1588,7 +1599,7 @@ mod day19 {
     use super::day16::Read::*;
 
     impl Op {
-       fn get(word: &str) -> Self {
+        pub fn get(word: &str) -> Self {
             match word {
                 "addr" => Add(Reg),
                 "addi" => Add(Imm),
@@ -1606,34 +1617,43 @@ mod day19 {
                 "eqrr" => Equ(Reg, Reg),
                 "eqri" => Equ(Reg, Imm),
                 "eqir" => Equ(Imm, Reg),
-                _ => panic!("Unsupported instruction")
+                _ => panic!("Unsupported instruction"),
             }
         }
     }
 
-    pub fn run(input: &str) -> (i32, i32) {
+    pub fn run(input: &str) -> (usize, usize) {
         let mut lines = input.lines();
-        let pcr: usize = lines.next().unwrap().split(" ").nth(1).unwrap().parse().unwrap();
-        let code: Vec<_> = lines.map(|line| {
-            let parts: Vec<_> = line.split(' ').collect();
-            let op = Op::get(parts[0]);
-            let a: usize = parts[1].parse().unwrap();
-            let b: usize = parts[2].parse().unwrap();
-            let c: usize = parts[3].parse().unwrap();
-            (op, a, b, c)
-        }).collect();
+        let pcr: usize = lines
+            .next()
+            .unwrap()
+            .split(" ")
+            .nth(1)
+            .unwrap()
+            .parse()
+            .unwrap();
+        let code: Vec<_> = lines
+            .map(|line| {
+                let parts: Vec<_> = line.split(' ').collect();
+                let op = Op::get(parts[0]);
+                let a: usize = parts[1].parse().unwrap();
+                let b: usize = parts[2].parse().unwrap();
+                let c: usize = parts[3].parse().unwrap();
+                (op, a, b, c)
+            })
+            .collect();
 
-        let mut regs: Vec<i32> = vec![0, 0, 0, 0, 0, 0];
-        while let Some(ins) = &code.get(regs[pcr] as usize) {
-            regs = ins.0.exec(ins.1, ins.2, ins.3, &regs);
+        let mut regs = [0, 0, 0, 0, 0, 0];
+        while let Some(ins) = &code.get(regs[pcr]) {
+            ins.0.exec(ins.1, ins.2, ins.3, &mut regs);
             regs[pcr] += 1;
         }
         let a = regs[0];
 
         let mut ttl = code.len();
-        let mut regs: Vec<i32> = vec![1, 0, 0, 0, 0, 0];
-        while let Some(ins) = &code.get(regs[pcr] as usize) {
-            regs = ins.0.exec(ins.1, ins.2, ins.3, &regs);
+        let mut regs = [1, 0, 0, 0, 0, 0];
+        while let Some(ins) = &code.get(regs[pcr]) {
+            ins.0.exec(ins.1, ins.2, ins.3, &mut regs);
             regs[pcr] += 1;
             ttl -= 1;
             if ttl == 0 {
@@ -1659,14 +1679,28 @@ mod day20 {
 
         for c in input.chars() {
             match c {
-                'N' => { pos.1 -= 1; },
-                'S' => { pos.1 += 1; },
-                'W' => { pos.0 -= 1; },
-                'E' => { pos.0 += 1; },
-                '(' => { queue.push(pos); },
-                ')' => { queue.pop(); },
-                '|' => { pos = queue[queue.len()-1]; },
-                _ => ()
+                'N' => {
+                    pos.1 -= 1;
+                }
+                'S' => {
+                    pos.1 += 1;
+                }
+                'W' => {
+                    pos.0 -= 1;
+                }
+                'E' => {
+                    pos.0 += 1;
+                }
+                '(' => {
+                    queue.push(pos);
+                }
+                ')' => {
+                    queue.pop();
+                }
+                '|' => {
+                    pos = queue[queue.len() - 1];
+                }
+                _ => (),
             }
             if visited.contains_key(&pos) {
                 dist = visited[&pos];
@@ -1684,15 +1718,95 @@ mod day20 {
 }
 
 mod day21 {
-    pub fn run(_input: &str) -> (usize, usize) {
-        unimplemented!();
+    use super::day16::Op;
+    use super::day16::Op::*;
+    use super::day16::Read::*;
+    use std::collections::HashSet;
+
+    fn solve_opt() -> i64 {
+        let mut seen: HashSet<i64> = HashSet::new();
+        let mut r2;
+        let mut r3 = 0;
+        let mut last = 0;
+        while seen.insert(r3) {
+            last = r3;
+            r2 = r3 | 65536;
+            r3 = 832312;
+
+            while r2 > 0 {
+                r3 = (((r3 + (r2 & 0xff)) & 0xffffff) * 65899) & 0xffffff;
+                r2 >>= 8;
+            }
+        }
+        last
+    }
+
+    fn solve(
+        code: &Vec<(Op, usize, usize, usize)>,
+        mut regs: [usize; 6],
+        pcr: usize,
+        check: usize,
+    ) -> usize {
+        let mut seen: HashSet<usize> = HashSet::new();
+        seen.insert(regs[3]);
+        let mut last = 0;
+        while let Some(ins) = &code.get(regs[pcr]) {
+            if regs[pcr] == check {
+                if !seen.insert(regs[3]) {
+                    break;
+                }
+                last = regs[3];
+            }
+            ins.0.exec(ins.1, ins.2, ins.3, &mut regs);
+            regs[pcr] += 1;
+        }
+
+        last
+    }
+
+    pub fn run(input: &str) -> (usize, usize) {
+        let mut lines = input.lines();
+        let pcr: usize = lines
+            .next()
+            .unwrap()
+            .split(" ")
+            .nth(1)
+            .unwrap()
+            .parse()
+            .unwrap();
+        let code: Vec<_> = lines
+            .map(|line| {
+                let parts: Vec<_> = line.split(' ').collect();
+                let op = Op::get(parts[0]);
+                let a: usize = parts[1].parse().unwrap();
+                let b: usize = parts[2].parse().unwrap();
+                let c: usize = parts[3].parse().unwrap();
+                (op, a, b, c)
+            })
+            .collect();
+
+        let mut regs = [0, 0, 0, 0, 0, 0];
+        let mut check = 0;
+        while let Some(ins) = &code.get(regs[pcr]) {
+            check = regs[pcr];
+            ins.0.exec(ins.1, ins.2, ins.3, &mut regs);
+            regs[pcr] += 1;
+            if Equ(Reg, Reg) == ins.0 {
+                break;
+            }
+        }
+        let a = regs[3];
+
+        //let b = solve_opt();
+        let b = solve(&code, regs, pcr, check);
+        (a, b)
     }
 }
 
 mod day22 {
-    use self::Tool::*;
     use self::Ground::*;
-    use std::collections::{HashMap, BTreeSet};
+    use self::Tool::*;
+    use std::collections::{BTreeSet, HashMap};
     type Pos = (u32, u32);
 
     #[derive(Debug)]
@@ -1732,7 +1846,7 @@ mod day22 {
                 p if p == self.target => 0,
                 (x, 0) => x * 16807,
                 (0, y) => y * 48271,
-                (x, y) => self.erosion((x-1, y)) * self.erosion((x, y-1))
+                (x, y) => self.erosion((x - 1, y)) * self.erosion((x, y - 1)),
             }
         }
 
@@ -1761,16 +1875,33 @@ mod day22 {
                 NARROW => tool != CLIMB,
             }
         }
-
     }
 
     pub fn run(input: &str) -> (u32, u32) {
         let mut lines = input.lines();
-        let depth = lines.next().unwrap().split(' ').skip(1).next().unwrap().parse().unwrap();
-        let mut t = lines.next().unwrap().split(' ').skip(1).next().unwrap().split(',');
+        let depth = lines
+            .next()
+            .unwrap()
+            .split(' ')
+            .skip(1)
+            .next()
+            .unwrap()
+            .parse()
+            .unwrap();
+        let mut t = lines
+            .next()
+            .unwrap()
+            .split(' ')
+            .skip(1)
+            .next()
+            .unwrap()
+            .split(',');
         let mut cave = Cave {
             depth: depth,
-            target: (t.next().unwrap().parse().unwrap(), t.next().unwrap().parse().unwrap()),
+            target: (
+                t.next().unwrap().parse().unwrap(),
+                t.next().unwrap().parse().unwrap(),
+            ),
             cache_erosion: HashMap::new(),
         };
         let a = cave.risk();
@@ -1795,19 +1926,19 @@ mod day22 {
             }
             explored.insert((pos, tool), time);
 
-            unexplored.insert((time+7, pos, NEITHER));
-            unexplored.insert((time+7, pos, TORCH));
-            unexplored.insert((time+7, pos, CLIMB));
+            unexplored.insert((time + 7, pos, NEITHER));
+            unexplored.insert((time + 7, pos, TORCH));
+            unexplored.insert((time + 7, pos, CLIMB));
 
-            unexplored.insert((time+1, (pos.0+1, pos.1), tool));
+            unexplored.insert((time + 1, (pos.0 + 1, pos.1), tool));
             if pos.1 + 1 <= cave.depth {
-                unexplored.insert((time+1, (pos.0, pos.1+1), tool));
+                unexplored.insert((time + 1, (pos.0, pos.1 + 1), tool));
             }
             if pos.0 > 0 {
-                unexplored.insert((time+1, (pos.0-1, pos.1), tool));
+                unexplored.insert((time + 1, (pos.0 - 1, pos.1), tool));
             }
             if pos.1 > 0 {
-                unexplored.insert((time+1, (pos.0, pos.1-1), tool));
+                unexplored.insert((time + 1, (pos.0, pos.1 - 1), tool));
             }
         }
 
@@ -1816,14 +1947,272 @@ mod day22 {
 }
 
 mod day23 {
-    pub fn run(_input: &str) -> (usize, usize) {
-        unimplemented!();
+    use regex::Regex;
+    use std::cmp::{max, min};
+    use std::i32::{MAX, MIN};
+
+    type Pos = (i32, i32, i32);
+
+    fn manhattan(a: (i32, i32, i32), b: (i32, i32, i32)) -> i32 {
+        (a.0 - b.0).abs() as i32 + (a.1 - b.1).abs() as i32 + (a.2 - b.2).abs() as i32
+    }
+
+    #[derive(Debug, PartialEq, Eq, Hash)]
+    struct Bot {
+        pos: Pos,
+        r: i32,
+    }
+
+    impl Bot {
+        fn in_range(&self, pos: Pos) -> bool {
+            manhattan(self.pos, pos) <= self.r
+        }
+    }
+
+    pub fn run(input: &str) -> (usize, i32) {
+        let re = Regex::new(r"(?m)^pos=<(-?\d+),(-?\d+),(-?\d+)>, r=(-?\d+)$").unwrap();
+        let mut min_x = MAX;
+        let mut max_x = MIN;
+        let mut min_y = MAX;
+        let mut max_y = MIN;
+        let mut min_z = MAX;
+        let mut max_z = MIN;
+        let bots: Vec<Bot> = re
+            .captures_iter(input)
+            .map(|m| {
+                let x = m[1].parse().unwrap();
+                min_x = min(min_x, x);
+                max_x = max(max_x, x);
+                let y = m[2].parse().unwrap();
+                min_y = min(min_y, y);
+                max_y = max(max_y, y);
+                let z = m[3].parse().unwrap();
+                min_z = min(min_z, z);
+                max_z = max(max_z, z);
+                Bot {
+                    pos: (x, y, z),
+                    r: m[4].parse().unwrap(),
+                }
+            })
+            .collect();
+
+        let m = bots.iter().max_by_key(|b| b.r).unwrap();
+        let a = bots.iter().filter(|b| m.in_range(b.pos)).count();
+
+        let mut step = 100000000;
+        let mut best = (0, 0, 0);
+        let mut most = 0;
+        let mut near = MAX;
+
+        while step > 0 {
+            for x in (min_x..max_x).step_by(step) {
+                for y in (min_y..max_y).step_by(step) {
+                    for z in (min_z..max_z).step_by(step) {
+                        let r = bots.iter().filter(|b| b.in_range((x, y, z))).count();
+                        if r > most {
+                            most = r;
+                            best = (x, y, z);
+                            near = x.abs() + y.abs() + z.abs();
+                        } else if r == most {
+                            let d = x.abs() + y.abs() + z.abs();
+                            if d < near {
+                                best = (x, y, z);
+                                near = d;
+                            }
+                        }
+                    }
+                }
+            }
+            min_x = best.0 - step as i32;
+            max_x = best.0 + step as i32;
+            min_y = best.1 - step as i32;
+            max_y = best.1 + step as i32;
+            min_z = best.2 - step as i32;
+            max_z = best.2 + step as i32;
+            step /= 2;
+        }
+
+        (a, near)
     }
 }
 
 mod day24 {
-    pub fn run(_input: &str) -> (usize, usize) {
-        unimplemented!();
+    use regex::Regex;
+    use std::collections::BTreeSet;
+    use std::fmt;
+
+    #[derive(Clone, PartialOrd, Ord, PartialEq, Eq, Hash)]
+    struct Group {
+        team: u8,
+        units: u32,
+        hp: u32,
+        attack: u32,
+        attack_type: String,
+        weak: BTreeSet<String>,
+        immune: BTreeSet<String>,
+        initiative: u32,
+    }
+
+    impl Group {
+        fn parse(line: &str, team: u8) -> Self {
+            let re_units = Regex::new(r"^(\d+) units").unwrap();
+            let re_hp = Regex::new(r"with (\d+) hit points").unwrap();
+            let re_attack = Regex::new(r"does (\d+) ").unwrap();
+            let re_attack_type = Regex::new(r" (\w+) damage").unwrap();
+            let re_initiative = Regex::new(r"initiative (\d+)$").unwrap();
+            let re_immune = Regex::new(r"immune to (\w+(, \w+)*)[;)]").unwrap();
+            let re_weak = Regex::new(r"weak to (\w+(, \w+)*)[;)]").unwrap();
+            Group {
+                team: team,
+                units: re_units.captures(line).unwrap()[1].parse().unwrap(),
+                hp: re_hp.captures(line).unwrap()[1].parse().unwrap(),
+                attack: re_attack.captures(line).unwrap()[1].parse().unwrap(),
+                attack_type: re_attack_type.captures(line).unwrap()[1].to_string(),
+                weak: if let Some(m) = re_weak.captures(line) {
+                    m[1].split(", ").map(|s| s.to_string()).collect()
+                } else {
+                    BTreeSet::new()
+                },
+                immune: if let Some(m) = re_immune.captures(line) {
+                    m[1].split(", ").map(|s| s.to_string()).collect()
+                } else {
+                    BTreeSet::new()
+                },
+                initiative: re_initiative.captures(line).unwrap()[1].parse().unwrap(),
+            }
+        }
+
+        fn power(&self) -> u32 {
+            self.units * self.attack
+        }
+
+        fn damage(&self, o: &Group) -> u32 {
+            if o.immune.contains(&self.attack_type) {
+                0
+            } else if o.weak.contains(&self.attack_type) {
+                2 * self.power()
+            } else {
+                self.power()
+            }
+        }
+    }
+
+    impl fmt::Debug for Group {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            write!(f, "{} units each with {} hit points (immune to {:?}; weak to {:?}) with an attack that does {} {} damage at initiative {}", self.units, self.hp, self.immune, self.weak, self.attack, self.attack_type, self.initiative)
+        }
+    }
+
+    fn battle(teams: &[Group]) -> Option<(u8, u32)> {
+        let mut groups = teams.to_vec();
+        let mut sum = groups.iter().map(|u| u.units).sum();
+        while groups.iter().any(|u| u.units > 0 && u.team == 0)
+            && groups.iter().any(|u| u.units > 0 && u.team == 1)
+        {
+            groups.sort_unstable_by_key(|g| (-(g.power() as i32), -(g.initiative as i32)));
+            let mut targets: Vec<(usize, usize)> = vec![];
+            for (i, g) in groups.iter().enumerate().filter(|(_, g)| g.units > 0) {
+                if let Some((j, b)) = groups
+                    .iter()
+                    .enumerate()
+                    .filter(|(j, t)| {
+                        !targets.iter().any(|(_, x)| x == j) && t.team != g.team && t.units > 0
+                    })
+                    .max_by_key(|(_, o)| (g.damage(o), o.power(), o.initiative))
+                {
+                    if g.damage(b) > 0 {
+                        targets.push((i, j));
+                    }
+                }
+            }
+            targets.sort_unstable_by_key(|(i, _)| -(groups[*i].initiative as i32));
+
+            for (i, j) in targets {
+                let a = &groups[i];
+                if a.units > 0 {
+                    let killed = a.damage(&groups[j]) / groups[j].hp;
+                    groups[j].units = groups[j].units.saturating_sub(killed);
+                }
+            }
+
+            let new_sum = groups.iter().map(|u| u.units).sum();
+            if sum == new_sum {
+                return None;
+            }
+            sum = new_sum;
+        }
+
+        Some((
+            groups.iter().filter(|u| u.units > 0).next().unwrap().team,
+            sum,
+        ))
+    }
+
+    pub fn run(input: &str) -> (u32, u32) {
+        let mut lines = input.lines();
+        lines.next();
+        let mut groups = vec![];
+        let mut team = 0;
+        while let Some(line) = lines.next() {
+            if line == "" {
+                team += 1;
+                lines.next();
+            } else {
+                let g = Group::parse(line, team);
+                groups.push(g);
+            }
+        }
+
+        let a = battle(&groups).unwrap().1;
+
+        let mut boost = 1;
+        let b = loop {
+            let mut boosted = groups.to_vec();
+            boosted
+                .iter_mut()
+                .filter(|u| u.team == 0)
+                .for_each(|u| u.attack += boost);
+            match battle(&boosted) {
+                Some((0, units)) => {
+                    break units;
+                }
+                _ => {
+                    boost += 1;
+                }
+            }
+        };
+        (a, b)
+    }
+}
+
+mod day25 {
+    use std::collections::HashSet;
+    type Point = Vec<i32>;
+
+    fn manhattan(a: &Point, b: &Point) -> i32 {
+        a.iter()
+            .zip(b.iter())
+            .map(|(i, j)| (i - j).abs() as i32)
+            .sum()
+    }
+
+    pub fn run(input: &str) -> usize {
+        let points: Vec<Point> = input
+            .lines()
+            .map(|l| l.split(',').map(|c| c.parse().unwrap()).collect())
+            .collect();
+
+        let mut cs: Vec<HashSet<Point>> = vec![];
+        for p in points {
+            let (removed, kept): (Vec<_>, Vec<_>) = cs
+                .into_iter()
+                .partition(|e| e.iter().any(|p2| manhattan(&p, p2) <= 3));
+            cs = kept;
+            let mut c: HashSet<Point> = removed.into_iter().flatten().collect();
+            c.insert(p);
+            cs.push(c);
+        }
+        cs.len()
     }
 }
 
@@ -2006,10 +2395,41 @@ mod tests {
     }
 
     #[test]
+    fn test_day21() {
+        let input = read_input(21).unwrap();
+        let (a, b) = day21::run(&input);
+        assert_eq!(a, 212115);
+        assert_eq!(b, 9258470);
+    }
+
+    #[test]
     fn test_day22() {
         let input = read_input(22).unwrap();
-        let (a, b) = day20::run(&input);
+        let (a, b) = day22::run(&input);
         assert_eq!(a, 11810);
-        assert_eq!(b, 0);
+        assert_eq!(b, 1015);
+    }
+
+    #[test]
+    fn test_day23() {
+        let input = read_input(23).unwrap();
+        let (a, b) = day23::run(&input);
+        assert_eq!(a, 326);
+        assert_eq!(b, 142473501);
+    }
+
+    #[test]
+    fn test_day24() {
+        let input = read_input(24).unwrap();
+        let (a, b) = day24::run(&input);
+        assert_eq!(a, 26914);
+        assert_eq!(b, 862);
+    }
+
+    #[test]
+    fn test_day25() {
+        let input = read_input(25).unwrap();
+        let a = day25::run(&input);
+        assert_eq!(a, 359);
     }
 }
