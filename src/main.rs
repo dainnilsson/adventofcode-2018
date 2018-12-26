@@ -1237,10 +1237,10 @@ mod day16 {
     impl Op {
         pub fn exec(&self, a: usize, b: usize, c: usize, regs: &mut [usize]) {
             match self {
-                Add(read) => regs[c] = Reg.get(a, regs) + read.get(b, regs),
-                Mul(read) => regs[c] = Reg.get(a, regs) * read.get(b, regs),
-                Ban(read) => regs[c] = Reg.get(a, regs) & read.get(b, regs),
-                Bor(read) => regs[c] = Reg.get(a, regs) | read.get(b, regs),
+                Add(read) => regs[c] = regs[a] + read.get(b, regs),
+                Mul(read) => regs[c] = regs[a] * read.get(b, regs),
+                Ban(read) => regs[c] = regs[a] & read.get(b, regs),
+                Bor(read) => regs[c] = regs[a] | read.get(b, regs),
                 Set(read) => regs[c] = read.get(a, regs),
                 Gtt(read_a, read_b) => {
                     regs[c] = if read_a.get(a, regs) > read_b.get(b, regs) {
@@ -1717,14 +1717,14 @@ mod day20 {
     }
 }
 
-mod day21 {
+pub mod day21 {
     use super::day16::Op;
     use super::day16::Op::*;
     use super::day16::Read::*;
     use std::collections::HashSet;
 
-    fn solve_opt() -> i64 {
-        let mut seen: HashSet<i64> = HashSet::new();
+    pub fn solve_opt() -> usize {
+        let mut seen: HashSet<usize> = HashSet::new();
         let mut r2;
         let mut r3 = 0;
         let mut last = 0;
@@ -1738,29 +1738,6 @@ mod day21 {
                 r2 >>= 8;
             }
         }
-        last
-    }
-
-    fn solve(
-        code: &Vec<(Op, usize, usize, usize)>,
-        mut regs: [usize; 6],
-        pcr: usize,
-        check: usize,
-    ) -> usize {
-        let mut seen: HashSet<usize> = HashSet::new();
-        seen.insert(regs[3]);
-        let mut last = 0;
-        while let Some(ins) = &code.get(regs[pcr]) {
-            if regs[pcr] == check {
-                if !seen.insert(regs[3]) {
-                    break;
-                }
-                last = regs[3];
-            }
-            ins.0.exec(ins.1, ins.2, ins.3, &mut regs);
-            regs[pcr] += 1;
-        }
-
         last
     }
 
@@ -1787,19 +1764,33 @@ mod day21 {
 
         let mut regs = [0, 0, 0, 0, 0, 0];
         let mut check = 0;
+        let mut cmp = 0;
         while let Some(ins) = &code.get(regs[pcr]) {
             check = regs[pcr];
             ins.0.exec(ins.1, ins.2, ins.3, &mut regs);
             regs[pcr] += 1;
             if Equ(Reg, Reg) == ins.0 {
+                cmp = ins.1;
                 break;
             }
         }
-        let a = regs[3];
+        let a = regs[cmp];
 
-        //let b = solve_opt();
-        let b = solve(&code, regs, pcr, check);
-        (a, b)
+        let mut seen: HashSet<usize> = HashSet::new();
+        seen.insert(regs[cmp]);
+        let mut last = 0;
+        while let Some(ins) = &code.get(regs[pcr]) {
+            if regs[pcr] == check {
+                if !seen.insert(regs[3]) {
+                    break;
+                }
+                last = regs[cmp];
+            }
+            ins.0.exec(ins.1, ins.2, ins.3, &mut regs);
+            regs[pcr] += 1;
+        }
+
+        (a, last)
     }
 }
 
